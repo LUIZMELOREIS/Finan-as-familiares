@@ -35,7 +35,7 @@ export function SeletorMes({ competencia, aoMudar, maxima }: { competencia: stri
   return (
     <div className="flex items-center justify-between gap-2">
       <button className="botao botao-secundario !px-3" onClick={() => aoMudar(somarMeses(competencia, -1))} aria-label="Mês anterior"><span className="text-xl" aria-hidden>‹</span></button>
-      <div className="font-bold text-lg text-center flex-1 capitalize">{nomeCompetencia(competencia)}</div>
+      <div className="font-bold text-lg text-center flex-1">{nomeCompetencia(competencia)}</div>
       <button className="botao botao-secundario !px-3" onClick={() => aoMudar(somarMeses(competencia, 1))} disabled={!podeAvancar} aria-label="Próximo mês"><span className="text-xl" aria-hidden>›</span></button>
     </div>
   )
