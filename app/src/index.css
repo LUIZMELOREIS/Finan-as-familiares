@@ -1,0 +1,215 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
+@import 'tailwindcss';
+
+/* ===== Paleta (extraída da imagem de referência: dashboard escuro, roxo/magenta/amarelo) ===== */
+:root {
+  --bg-app: #0D0E23;
+  --bg-painel: #141519;
+  --bg-card: #1E1F2B;
+  --bg-card-hover: #2A2B3A;
+  --borda: #2E3042;
+  --texto: #F4F4F8;
+  --texto-suave: #A9AAB8;
+
+  --primaria: #5B5BE0;
+  --primaria-sel: #7776E6;
+  --magenta: #BD55C7;
+  --amarelo: #F2C552;
+  --laranja: #E0852F;
+  --verde: #4CB963;
+  --vermelho: #E5535B;
+  --azul: #4FA3E0;
+
+  --raio: 16px;
+  --sombra: 0 8px 24px rgba(0, 0, 0, 0.28);
+  --tamanho-base: 17px;
+  --toque-min: 48px;
+  color-scheme: dark;
+}
+
+/* Tema claro — idosos costumam ler melhor no claro */
+:root[data-tema='claro'] {
+  --bg-app: #ECECF4;
+  --bg-painel: #F4F4F8;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F1F1F8;
+  --borda: #D9DAE6;
+  --texto: #15162B;
+  --texto-suave: #5A5C72;
+  --sombra: 0 6px 18px rgba(20, 20, 60, 0.08);
+  color-scheme: light;
+}
+
+/* Alto contraste */
+:root[data-contraste='alto'] {
+  --borda: #8A8CA8;
+  --texto-suave: #D5D6E4;
+}
+:root[data-tema='claro'][data-contraste='alto'] {
+  --texto-suave: #2A2B40;
+  --borda: #5A5C72;
+}
+
+/* Tamanho da letra */
+:root[data-letra='grande'] { --tamanho-base: 19px; }
+:root[data-letra='muito-grande'] { --tamanho-base: 22px; }
+
+@theme {
+  --color-app: var(--bg-app);
+  --color-painel: var(--bg-painel);
+  --color-card: var(--bg-card);
+  --color-card-hover: var(--bg-card-hover);
+  --color-borda: var(--borda);
+  --color-texto: var(--texto);
+  --color-suave: var(--texto-suave);
+  --color-primaria: var(--primaria);
+  --color-primaria-sel: var(--primaria-sel);
+  --color-magenta: var(--magenta);
+  --color-amarelo: var(--amarelo);
+  --color-laranja: var(--laranja);
+  --color-verde: var(--verde);
+  --color-vermelho: var(--vermelho);
+  --color-azul: var(--azul);
+  --font-sans: 'Poppins', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --radius-card: 16px;
+}
+
+html {
+  font-size: var(--tamanho-base);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-painel);
+  color: var(--texto);
+  font-family: 'Poppins', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+  min-height: 100dvh;
+}
+
+/* Área segura do iPhone (entalhe e barra inferior) */
+.area-segura-topo { padding-top: env(safe-area-inset-top, 0px); }
+.area-segura-base { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* ===== Componentes base ===== */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  box-shadow: var(--sombra);
+}
+.card-toque {
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+.card-toque:active { transform: scale(0.985); background: var(--bg-card-hover); }
+
+/* Botões sempre com no mínimo 48×48 px */
+.botao {
+  min-height: var(--toque-min);
+  min-width: var(--toque-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.1rem;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.2;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: filter 0.12s ease, transform 0.12s ease, background 0.12s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.botao:active { transform: scale(0.97); }
+.botao:disabled { opacity: 0.5; cursor: not-allowed; }
+.botao-primario { background: var(--primaria); color: #fff; }
+.botao-primario:hover { filter: brightness(1.1); }
+.botao-secundario { background: var(--bg-card); color: var(--texto); border-color: var(--borda); }
+.botao-secundario:hover { background: var(--bg-card-hover); }
+.botao-fantasma { background: transparent; color: var(--texto-suave); }
+.botao-fantasma:hover { background: var(--bg-card-hover); color: var(--texto); }
+.botao-perigo { background: var(--vermelho); color: #fff; }
+.botao-verde { background: var(--verde); color: #fff; }
+.botao-amarelo { background: var(--amarelo); color: #1a1a1a; }
+
+.campo {
+  width: 100%;
+  min-height: var(--toque-min);
+  background: var(--bg-painel);
+  border: 1px solid var(--borda);
+  border-radius: 14px;
+  padding: 0.7rem 0.95rem;
+  color: var(--texto);
+  font-size: 1rem;
+  font-family: inherit;
+  outline: none;
+}
+.campo:focus { border-color: var(--primaria-sel); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primaria) 30%, transparent); }
+.campo::placeholder { color: var(--texto-suave); opacity: 0.7; }
+select.campo { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--texto-suave) 50%), linear-gradient(135deg, var(--texto-suave) 50%, transparent 50%); background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%; background-size: 6px 6px, 6px 6px; background-repeat: no-repeat; padding-right: 2.5rem; }
+
+.rotulo { display: block; font-size: 0.9rem; color: var(--texto-suave); font-weight: 500; margin-bottom: 0.35rem; }
+
+.titulo-secao { font-size: 0.85rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--texto-suave); font-weight: 600; }
+
+.numero-grande { font-weight: 800; font-size: 1.75rem; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+
+/* Barra de progresso */
+.progresso { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--texto-suave) 20%, transparent); overflow: hidden; }
+.progresso > span { display: block; height: 100%; border-radius: 999px; transition: width 0.6s ease; }
+
+/* Botão flutuante "+" */
+.fab {
+  position: fixed;
+  right: 1rem;
+  bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px));
+  width: 68px;
+  height: 68px;
+  border-radius: 999px;
+  background: var(--primaria);
+  color: #fff;
+  font-size: 2.2rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--primaria) 55%, transparent);
+  border: none;
+  cursor: pointer;
+  z-index: 40;
+  transition: transform 0.15s ease;
+}
+.fab:active { transform: scale(0.94); }
+@media (min-width: 1024px) { .fab { bottom: 2rem; right: 2rem; } }
+
+/* Folha inferior (modal de celular) */
+.folha-fundo { position: fixed; inset: 0; background: rgba(5, 6, 20, 0.6); backdrop-filter: blur(2px); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+.folha { width: 100%; max-width: 640px; background: var(--bg-card); border-radius: 24px 24px 0 0; border: 1px solid var(--borda); border-bottom: none; padding: 1.1rem 1.1rem calc(1.25rem + env(safe-area-inset-bottom, 0px)); max-height: 92dvh; overflow-y: auto; animation: subir 0.22s ease-out; }
+@media (min-width: 1024px) { .folha-fundo { align-items: center; } .folha { border-radius: 24px; border-bottom: 1px solid var(--borda); } }
+.folha-alca { width: 44px; height: 5px; border-radius: 999px; background: var(--borda); margin: 0 auto 0.9rem; }
+@keyframes subir { from { transform: translateY(24px); opacity: 0.6; } to { transform: translateY(0); opacity: 1; } }
+
+/* Avisos */
+.aviso { animation: subir 0.2s ease-out; }
+
+/* Esconder barra de rolagem horizontal mantendo rolagem */
+.rolagem-escondida { scrollbar-width: none; }
+.rolagem-escondida::-webkit-scrollbar { display: none; }
+
+/* Animações de celebração */
+@keyframes confete-cair { 0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; } 100% { transform: translateY(110vh) rotate(720deg); opacity: 0; } }
+.confete { position: fixed; top: 0; width: 10px; height: 14px; border-radius: 2px; animation: confete-cair 2.6s ease-in forwards; pointer-events: none; z-index: 100; }
+@keyframes pulsar { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+.pulsar { animation: pulsar 1.6s ease-in-out infinite; }
+
+/* Foco visível para teclado (acessibilidade) */
+:focus-visible { outline: 3px solid var(--primaria-sel); outline-offset: 2px; }
+
+/* Reduz animações se o usuário pediu */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

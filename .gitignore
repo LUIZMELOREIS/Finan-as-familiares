@@ -1,0 +1,19 @@
+# Dependências e build
+node_modules/
+app/dist/
+app/dev-dist/
+app/test-results/
+app/playwright-report/
+app/capturas/
+
+# Segredos — nunca versionar
+.env
+.env.local
+app/.env
+app/.env.local
+apps-script/.clasp.json
+apps-script/.clasprc.json
+
+# Sistema
+.DS_Store
+*.log
