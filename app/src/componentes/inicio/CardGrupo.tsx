@@ -31,10 +31,10 @@ export function CardGrupo({ grupo, realizado, orcado, projetos, para }: { grupo:
       <div className="flex items-center gap-3">
         <span className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shrink-0" style={{ background: `color-mix(in srgb, ${grupo.cor} 22%, transparent)` }} aria-hidden>{grupo.icone}</span>
         <div className="flex-1 min-w-0">
-          <div className="font-bold text-lg leading-tight truncate">{grupo.nome}</div>
+          <div className="font-bold text-[1.05rem] leading-tight line-clamp-2">{grupo.nome}</div>
           <div className="text-xs text-suave">{ehEntrada ? 'Entrou no mês' : ehSonhos ? 'Guardado no mês' : 'Gasto no mês'}</div>
         </div>
-        <div className={`numero-grande !text-xl tabular-nums ${ehEntrada ? 'text-verde' : ''}`}>{moeda(realizado)}</div>
+        <div className={`numero-grande !text-lg tabular-nums shrink-0 ${ehEntrada ? 'text-verde' : ''}`}>{moeda(realizado)}</div>
       </div>
 
       {!ehEntrada && !ehSonhos && <BarraOrcamento realizado={realizado} orcado={orcado} cor={grupo.cor} />}
