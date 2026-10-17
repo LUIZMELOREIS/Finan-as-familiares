@@ -7,7 +7,19 @@
  */
 
 /** Versão da API devolvida no envelope. */
-const VERSAO_API = '1.0.0';
+const VERSAO_API = '2.0.0';
+
+/** Ids fixos dos 4 tipos (cards da tela inicial). Nunca aumentam. */
+const TIPO_RECEITAS = 't_receitas';
+const TIPO_FIXAS = 't_fixas';
+const TIPO_VARIAVEIS = 't_variaveis';
+const TIPO_PROJETOS = 't_projetos';
+/** Só estes três tipos aceitam grupos novos. */
+const TIPOS_COM_GRUPOS = [TIPO_RECEITAS, TIPO_FIXAS, TIPO_VARIAVEIS];
+/** Categoria dos aportes em projetos (lançada pela tela Projetos; não conta como despesa). */
+const CATEGORIA_APORTE = 'c_aporte_projeto';
+/** Nomes antigos (v1) que ainda podem aparecer em planilhas antigas. */
+const CATEGORIA_APORTE_ANTIGA = 'c_aporte_sonho';
 
 /** Fuso usado para datas (o mesmo do appsscript.json). */
 const FUSO = 'America/Sao_Paulo';
@@ -118,12 +130,56 @@ function ultimoDiaDoMes(comp) {
 }
 
 const MESES_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+const MESES_CURTOS_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-/** "2026-03" → "Março de 2026" */
-function nomeCompetencia(comp) {
+/** "2026-03" → "Março de 2026" (ou, com curto=true, "Mar/26" — igual ao app). */
+function nomeCompetencia(comp, curto) {
   const partes = String(comp).split('-').map(Number);
   if (!partes[0] || !partes[1]) return comp;
+  if (curto) return MESES_CURTOS_PT[partes[1] - 1] + '/' + String(partes[0]).slice(2);
   return MESES_PT[partes[1] - 1] + ' de ' + partes[0];
+}
+
+/** Nome do mês em minúsculas ("outubro") a partir da competência. */
+function nomeMes(comp) {
+  const m = Number(String(comp).slice(5, 7));
+  return m >= 1 && m <= 12 ? MESES_PT[m - 1].toLowerCase() : String(comp);
+}
+
+/** "2026-10-17" → "17/10/2026" */
+function dataBr(iso) {
+  const s = String(iso || '').slice(0, 10);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? m[3] + '/' + m[2] + '/' + m[1] : s;
+}
+
+/** Nome do perfil na versão 2: "Júnior" (v1) passou a se chamar "Dependente". */
+function normalizarPerfil(perfil) {
+  const p = String(perfil || '').trim();
+  if (normalizar(p) === 'JUNIOR') return 'Dependente';
+  if (['Administrador', 'Adulto', 'Dependente'].indexOf(p) >= 0) return p;
+  return p || 'Adulto';
+}
+
+/**
+ * Uma categoria conta como despesa "de verdade"? Aportes em projetos (tipo t_projetos,
+ * categoria c_aporte_projeto) são poupança: saem do caixa, mas não são gasto.
+ */
+function ehDespesaReal(categoria) {
+  if (!categoria || categoria.tipo !== 'despesa') return false;
+  if (categoria.tipo_id === TIPO_PROJETOS) return false;
+  return categoria.id !== CATEGORIA_APORTE && categoria.id !== CATEGORIA_APORTE_ANTIGA;
+}
+
+/** Média simples de uma lista de números (0 se vazia). */
+function media(lista) {
+  if (!lista || !lista.length) return 0;
+  return lista.reduce((s, v) => s + (Number(v) || 0), 0) / lista.length;
+}
+
+/** Soma de uma lista de números. */
+function somar(lista, pegar) {
+  return (lista || []).reduce((s, x) => s + (Number(pegar ? pegar(x) : x) || 0), 0);
 }
 
 /** Normaliza texto para comparação: sem acento, maiúsculo, só letras/números. */

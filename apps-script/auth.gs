@@ -10,7 +10,8 @@
  */
 
 const DIAS_VALIDADE_CONVITE = 7;
-const PERFIS_VALIDOS = ['Administrador', 'Adulto', 'Júnior'];
+/** Perfis da versão 2 ("Júnior", da v1, é aceito como sinônimo de Dependente — ver normalizarPerfil). */
+const PERFIS_VALIDOS = ['Administrador', 'Adulto', 'Dependente'];
 const MAX_TENTATIVAS_PIN = 5;
 const MINUTOS_BLOQUEIO_PIN = 10;
 
@@ -48,7 +49,7 @@ function prepararPin(pin) {
 function usuarioPublico(u, incluirToken) {
   if (!u) return null;
   const pub = {
-    id: u.id, nome: u.nome, apelido: u.apelido, avatar: u.avatar, cor: u.cor, perfil: u.perfil,
+    id: u.id, nome: u.nome, apelido: u.apelido, avatar: u.avatar, cor: u.cor, perfil: normalizarPerfil(u.perfil),
     ativo: !!u.ativo, criado_em: u.criado_em, ultimo_acesso: u.ultimo_acesso,
     mesada_mensal: Number(u.mesada_mensal) || 0,
   };
@@ -98,7 +99,7 @@ function limparConvitesVencidos() {
  * A URL inclui a API e o token da família para o app se configurar sozinho.
  */
 function acaoGerarConvite(p, ctx) {
-  const perfil = PERFIS_VALIDOS.indexOf(p.perfil) >= 0 ? p.perfil : 'Adulto';
+  const perfil = PERFIS_VALIDOS.indexOf(normalizarPerfil(p.perfil)) >= 0 ? normalizarPerfil(p.perfil) : 'Adulto';
   limparConvitesVencidos();
   const codigo = gerarCodigoConvite();
   const expira = new Date(Date.now() + DIAS_VALIDADE_CONVITE * 86400000);
@@ -127,7 +128,7 @@ function acaoEntrarConvite(p) {
   if (!convite || convite.usado_por || new Date(convite.expira_em).getTime() < Date.now()) {
     throw new ErroUsuario('Convite inválido ou vencido. Peça um novo ao administrador.');
   }
-  const apelido = String(p.apelido || '').trim();
+  const apelido = String(p.apelido || p.nome || '').trim();
   if (!apelido) throw new ErroUsuario('Diga como quer ser chamado (apelido).');
   const pin = prepararPin(p.pin);
   const agora = agoraIso();
@@ -135,13 +136,14 @@ function acaoEntrarConvite(p) {
   const existente = convite.usuario_id ? buscarPorId('Usuarios', convite.usuario_id) : null;
   if (existente) {
     usuario = atualizarPorId('Usuarios', existente.id, Object.assign({
-      apelido, avatar: p.avatar || existente.avatar || '🙂', cor: p.cor || existente.cor || '#5B5BE0',
+      apelido, nome: String(p.nome || existente.nome || apelido).trim(), avatar: p.avatar || existente.avatar || '', cor: p.cor || existente.cor || 'indigo',
       ativo: true, ultimo_acesso: agora, token: gerarToken(32),
     }, pin));
   } else {
     usuario = inserirLinhas('Usuarios', [Object.assign({
-      id: gerarId('u'), nome: apelido, apelido, avatar: p.avatar || '🙂', cor: p.cor || '#5B5BE0',
-      perfil: convite.perfil, ativo: true, criado_em: agora, ultimo_acesso: agora, mesada_mensal: 0,
+      id: gerarId('u'), nome: String(p.nome || apelido).trim(), apelido, avatar: p.avatar || '', cor: p.cor || 'indigo',
+      // O perfil vem do convite (definido pelo administrador); o enviado pelo app só vale se o convite não tiver.
+      perfil: normalizarPerfil(convite.perfil || p.perfil || 'Adulto'), ativo: true, criado_em: agora, ultimo_acesso: agora, mesada_mensal: 0,
       token: gerarToken(32), origem: 'convite',
     }, pin)])[0];
   }
@@ -208,6 +210,7 @@ function acaoListarUsuarios(p, ctx) {
 /** salvar_usuario (Administrador): cria ou edita. Pode definir PIN inicial via `usuario.pin`. */
 function acaoSalvarUsuario(p, ctx) {
   const u = p.usuario || {};
+  if (u.perfil) u.perfil = normalizarPerfil(u.perfil);
   if (u.perfil && PERFIS_VALIDOS.indexOf(u.perfil) < 0) throw new ErroUsuario('Perfil inválido: ' + u.perfil);
   const agora = agoraIso();
   const campos = {
@@ -223,7 +226,7 @@ function acaoSalvarUsuario(p, ctx) {
     salvo = atualizarPorId('Usuarios', existente.id, semUndefined(campos));
   } else {
     salvo = inserirLinhas('Usuarios', [Object.assign({
-      id: u.id || gerarId('u'), nome: u.apelido || '', apelido: u.apelido || 'Novo membro', avatar: '🙂', cor: '#5B5BE0',
+      id: u.id || gerarId('u'), nome: u.apelido || '', apelido: u.apelido || 'Novo membro', avatar: '', cor: 'indigo',
       perfil: 'Adulto', ativo: true, criado_em: agora, ultimo_acesso: agora, mesada_mensal: 0, token: gerarToken(32), origem: 'manual',
     }, semUndefined(campos))])[0];
   }

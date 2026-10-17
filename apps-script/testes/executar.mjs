@@ -5,7 +5,11 @@
  *  2. Carrega os arquivos num contexto com stubs mínimos de Utilities/PropertiesService/CacheService/
  *     LockService e testa as funções puras: parser de SMS, hash_dedup, parcelas, regra de votação,
  *     sugestão de categoria, leitura de fatura OFX/CSV, regex de OCR/NFC-e, PIN.
- *  3. Confere que obterAcoes() cobre todas as ações de docs/API.md.
+ *  3. Confere que obterAcoes() cobre todas as ações de docs/API.md (inclusive a seção "Versão 2").
+ *  4. Versão 2 (com um banco sintético em memória, sem planilha): esquema das abas novas, resumo do
+ *     mês e painel (aportes fora das despesas, meses previstos), próximas saídas, vigia (fora do
+ *     padrão, duplicada, assinatura nova, vencimentos), alertas, regras de loja, projetos calculados,
+ *     respostas locais do assistente, barras do Claude, parser do /start do Telegram.
  */
 import vm from 'node:vm'
 import fs from 'node:fs'
@@ -220,17 +224,325 @@ teste('convite guardado em Script Properties', () => {
 })
 
 console.log('11) Contrato: ações de docs/API.md × obterAcoes()')
+const md = fs.readFileSync(path.join(repo, 'docs', 'API.md'), 'utf8')
+const doContrato = [...md.matchAll(/^\| `([a-z_]+)` \|/gm)].map((m) => m[1]).filter((a) => a !== 'acao')
+const secaoV2 = md.slice(md.indexOf('## Versão 2'))
+const doContratoV2 = [...secaoV2.matchAll(/^\| `([a-z_]+)` \|/gm)].map((m) => m[1])
+const acoes = g.obterAcoes()
 teste('todas as ações do contrato estão roteadas', () => {
-  const md = fs.readFileSync(path.join(repo, 'docs', 'API.md'), 'utf8')
-  const doContrato = [...md.matchAll(/^\| `([a-z_]+)` \|/gm)].map((m) => m[1]).filter((a) => a !== 'acao')
-  const acoes = g.obterAcoes()
   const faltam = doContrato.filter((a) => !acoes[a])
   assert.equal(faltam.length, 0, 'faltam: ' + faltam.join(', '))
   for (const nome of Object.keys(acoes)) assert.equal(typeof acoes[nome].fn, 'function', nome + ' sem função')
-  assert.ok(doContrato.length >= 50)
+  assert.ok(doContrato.length >= 70)
 })
-teste('dados iniciais: 5 grupos, 42 categorias, 68 versículos', () => { assert.equal(g.dadosIniciaisGrupos().length, 5); assert.equal(g.dadosIniciaisCategorias().length, 42); assert.equal(g.dadosIniciaisVersiculos().length, 68) })
-teste('esquema cobre todas as abas', () => { const ordem = vm.runInContext('ORDEM_ABAS', ctx), esquema = vm.runInContext('ESQUEMA', ctx); assert.equal(ordem.length, 18); for (const aba of ordem) assert.ok(esquema[aba], aba) })
+teste('seção "Versão 2" do contrato: 16 ações novas, todas roteadas', () => {
+  assert.ok(doContratoV2.length >= 16, 'v2 tem ' + doContratoV2.length)
+  for (const a of ['listar_regras_loja', 'salvar_regra_loja', 'proximas_saidas', 'listar_avisos', 'marcar_aviso_lido', 'listar_alertas', 'salvar_alerta', 'excluir_alerta', 'assistente', 'assistente_sugestoes', 'listar_conversa', 'listar_patrimonio', 'salvar_patrimonio', 'registrar_saldo_patrimonio', 'relatorio_mensal', 'vincular_telegram']) assert.ok(doContratoV2.includes(a) && acoes[a], a)
+  assert.ok(acoes.listar_reunioes, 'listar_reunioes (usada pelo app) roteada')
+})
+teste('toda ação roteada está documentada (exceto listar_reunioes)', () => {
+  const extras = Object.keys(acoes).filter((a) => !doContrato.includes(a) && a !== 'listar_reunioes')
+  assert.equal(extras.length, 0, 'não documentadas: ' + extras.join(', '))
+})
+teste('perfis da tabela são da v2 (Dependente/Adulto/Administrador), nunca "Júnior"', () => {
+  for (const [nome, def] of Object.entries(acoes)) assert.ok(def.perfil === null || ['Dependente', 'Adulto', 'Administrador'].includes(def.perfil), nome + ': ' + def.perfil)
+  assert.equal(acoes.painel.perfil, 'Adulto'); assert.equal(acoes.salvar_patrimonio.perfil, 'Administrador'); assert.equal(acoes.assistente.perfil, 'Dependente')
+})
+teste('dados iniciais: 4 tipos, 14 grupos, 53 categorias, 8 grupos de análise, 68 versículos', () => {
+  assert.equal(g.dadosIniciaisTipos().length, 4); assert.equal(g.dadosIniciaisGrupos().length, 14); assert.equal(g.dadosIniciaisCategorias().length, 53)
+  assert.equal(g.dadosIniciaisGruposAnalise().length, 8); assert.equal(g.dadosIniciaisVersiculos().length, 68)
+  assert.equal(g.dadosIniciaisCores().indigo, '#5B5BE0')
+  const cat = g.dadosIniciaisCategorias().find((c) => c.id === 'c_mercado')
+  assert.equal(cat.tipo_id, 't_variaveis'); assert.equal(cat.icone, 'shopping-cart'); assert.equal(cat.grupo_analise, 'Alimentação')
+  assert.equal(g.dadosIniciaisCategorias().find((c) => c.id === 'c_aporte_projeto').oculta_cardapio, true)
+  assert.equal(g.dadosIniciaisGrupos()[0].nome, 'Dízimo e ofertas')
+})
+
+console.log('12) Esquema das abas (v2)')
+const ORDEM = vm.runInContext('ORDEM_ABAS', ctx), ESQ = vm.runInContext('ESQUEMA', ctx)
+teste('esquema cobre todas as 25 abas', () => { assert.equal(ORDEM.length, 25); for (const aba of ORDEM) assert.ok(ESQ[aba], aba) })
+teste('abas novas: Tipos, RegrasLoja, Alertas, Patrimonio, Avisos, Conversas, Telegram', () => { for (const aba of ['Tipos', 'RegrasLoja', 'Alertas', 'Patrimonio', 'Avisos', 'Conversas', 'Telegram']) assert.ok(ORDEM.includes(aba) && ESQ[aba].colunas.length > 2, aba) })
+teste('Grupos e Categorias com as colunas da v2', () => {
+  assert.equal(JSON.stringify(ESQ.Grupos.colunas), JSON.stringify(['id', 'tipo_id', 'nome', 'cor', 'grupo_analise', 'ordem', 'ativo']))
+  assert.equal(JSON.stringify(ESQ.Categorias.colunas), JSON.stringify(['id', 'tipo_id', 'grupo_id', 'nome', 'icone', 'cor', 'tipo', 'fixa', 'orcamento_mensal', 'palavras_chave', 'grupo_analise', 'sensivel', 'oculta_cardapio', 'ativa']))
+  assert.ok(ESQ.Alertas.listas.includes('avisar')); assert.ok(ESQ.Telegram.colunas.includes('chat_id'))
+})
+teste('Config padrão tem as chaves da v2', () => {
+  const c = g.configPadrao('Reis')
+  assert.equal(c.dependente_ve_salarios, false); assert.equal(c.rotina_vigia, true); assert.equal(c.rotina_quinzenal, true); assert.equal(c.rotina_fechamento, true); assert.equal(c.telegram_ativo, false)
+  assert.equal(c.junior_ve_salarios, undefined)
+})
+teste('normalizarPerfil: Júnior → Dependente', () => { assert.equal(g.normalizarPerfil('Júnior'), 'Dependente'); assert.equal(g.normalizarPerfil('junior'), 'Dependente'); assert.equal(g.normalizarPerfil('Adulto'), 'Adulto'); assert.equal(g.normalizarPerfil(''), 'Adulto') })
+teste('ehDespesaReal: aporte em projeto não é despesa', () => {
+  const cats = g.dadosIniciaisCategorias()
+  assert.equal(g.ehDespesaReal(cats.find((c) => c.id === 'c_aporte_projeto')), false)
+  assert.equal(g.ehDespesaReal(cats.find((c) => c.id === 'c_mercado')), true)
+  assert.equal(g.ehDespesaReal(cats.find((c) => c.id === 'c_salario')), false)
+  assert.equal(g.ehDespesaReal({ id: 'c_aporte_sonho', tipo: 'despesa' }), false)
+})
+teste('VERSAO_API 2.0.0', () => assert.equal(vm.runInContext('VERSAO_API', ctx), '2.0.0'))
+
+// ---------- Banco sintético para as regras da v2 ----------
+const hoje = g.hojeIso(), comp = g.competenciaDe()
+const m = (k) => g.somarMeses(comp, -k)
+function bancoTeste() {
+  const tipos = g.dadosIniciaisTipos(), grupos = g.dadosIniciaisGrupos(), categorias = g.dadosIniciaisCategorias()
+  const lancamentos = []
+  let n = 0
+  const add = (o) => lancamentos.push(Object.assign({ id: 'l' + (++n), status: 'confirmado', excluido: false, forma_pgto: 'pix', usuario_id: 'u_luiz', estabelecimento: '', descricao: '', cartao_id: '', parcela: '' }, o, { competencia: o.competencia || o.data.slice(0, 7) }))
+  for (let k = 11; k >= 0; k--) {
+    const c = m(k)
+    add({ data: c + '-05', tipo: 'receita', valor: 9000, categoria_id: 'c_salario', descricao: 'Salário' })
+    add({ data: c + '-10', tipo: 'despesa', valor: 1000, categoria_id: 'c_mercado', estabelecimento: 'Supermercado Condor', descricao: 'Condor', forma_pgto: 'débito' })
+    add({ data: c + '-09', tipo: 'despesa', valor: 55.9, categoria_id: 'c_streaming', estabelecimento: 'NETFLIX.COM', descricao: 'Netflix', forma_pgto: 'crédito', cartao_id: 'k1' })
+    add({ data: c + '-06', tipo: 'despesa', valor: 800, categoria_id: 'c_aporte_projeto', estabelecimento: 'Poupança', descricao: 'Aporte: Viagem de julho', projeto_id: 'p_viagem' })
+    if (k >= 1 && k <= 3) add({ data: c + '-15', tipo: 'despesa', valor: 100, categoria_id: 'c_delivery', estabelecimento: 'iFood', descricao: 'iFood', forma_pgto: 'crédito', cartao_id: 'k1' })
+  }
+  // Mês atual: delivery fora do padrão (300 contra média 100), cobrança duplicada, assinatura nova.
+  add({ data: comp + '-02', tipo: 'despesa', valor: 300, categoria_id: 'c_delivery', estabelecimento: 'IFOOD', descricao: 'iFood', forma_pgto: 'crédito', cartao_id: 'k1' })
+  add({ data: comp + '-03', tipo: 'despesa', valor: 64.9, categoria_id: 'c_farmacia', estabelecimento: 'DROGARIA NISSEI', descricao: 'Drogaria Nissei', forma_pgto: 'crédito', cartao_id: 'k2', usuario_id: 'u_nina' })
+  add({ data: comp + '-03', tipo: 'despesa', valor: 64.9, categoria_id: 'c_farmacia', estabelecimento: 'DROGARIA NISSEI', descricao: 'Drogaria Nissei', forma_pgto: 'crédito', cartao_id: 'k2', usuario_id: 'u_nina' })
+  add({ data: comp + '-01', tipo: 'despesa', valor: 44.9, categoria_id: 'c_streaming', estabelecimento: 'DISNEY PLUS', descricao: 'Disney', forma_pgto: 'crédito', cartao_id: 'k1' })
+  add({ data: m(1) + '-13', tipo: 'despesa', valor: 44.9, categoria_id: 'c_streaming', estabelecimento: 'DISNEY PLUS', descricao: 'Disney', forma_pgto: 'crédito', cartao_id: 'k1' })
+  // Parcela futura de cartão (a confirmar) no mês que vem.
+  add({ data: m(3) + '-16', competencia: g.somarMeses(comp, 1), tipo: 'despesa', valor: 189.9, categoria_id: 'c_moveis', estabelecimento: 'Tok&Stok', descricao: 'Sofá da sala', forma_pgto: 'crédito', cartao_id: 'k2', parcela: '5/10', status: 'a_confirmar', usuario_id: 'u_nina' })
+  const venc2 = g.somarDias(hoje, 2), venc10 = g.somarDias(hoje, 10), atrasada = g.somarDias(hoje, -5)
+  const aportes = lancamentos.filter((l) => l.projeto_id).map((l, i) => ({ id: 'a' + i, projeto_id: l.projeto_id, data: l.data, valor: l.valor, usuario_id: l.usuario_id, observacao: '' }))
+  return {
+    config: { nome_familia: 'Família Reis', dependente_ve_salarios: false, regra_votacao: 'maioria_mais_pais' },
+    usuarios: [
+      { id: 'u_luiz', apelido: 'Luiz', perfil: 'Administrador', ativo: true }, { id: 'u_nina', apelido: 'Nina', perfil: 'Administrador', ativo: true },
+      { id: 'u_julia', apelido: 'Júlia', perfil: 'Dependente', ativo: true }, { id: 'u_pedro', apelido: 'Pedro', perfil: 'Júnior', ativo: true },
+    ],
+    tipos, grupos, categorias, regras_loja: [], lancamentos,
+    contas_fixas: [
+      { id: 'f_luz', nome: 'Luz — Copel', categoria_id: 'c_luz', valor_previsto: 412, dia_vencimento: Number(venc2.slice(8, 10)), ativa: true },
+      { id: 'f_agua', nome: 'Água — Sanepar', categoria_id: 'c_agua', valor_previsto: 168, dia_vencimento: Number(venc10.slice(8, 10)), ativa: true },
+    ],
+    contas_a_pagar: [
+      { id: 'cp1', conta_fixa_id: 'f_luz', competencia: venc2.slice(0, 7), valor: 412, vencimento: venc2, status: 'aberta', linha_digitavel: '8364 0000' },
+      { id: 'cp0', conta_fixa_id: 'f_luz', competencia: atrasada.slice(0, 7) === venc2.slice(0, 7) ? m(1) : atrasada.slice(0, 7), valor: 398, vencimento: atrasada, status: 'aberta' },
+    ],
+    cartoes: [{ id: 'k1', apelido: 'Itaú', final: '4821', titular_id: 'u_luiz', dia_fechamento: 28, dia_vencimento: 5, ativo: true }, { id: 'k2', apelido: 'Nubank', final: '0937', titular_id: 'u_nina', dia_fechamento: 20, dia_vencimento: 10, ativo: true }],
+    caixa_entrada: [{ id: 'ce1', status: 'pendente', valor: 87.4, estabelecimento: 'PADARIA PAO QUENTE', usuario_id: 'u_luiz' }],
+    orcamento: [{ competencia: comp, categoria_id: 'c_delivery', valor_planejado: 300 }, { competencia: comp, categoria_id: 'c_mercado', valor_planejado: 1200 }, { competencia: comp, categoria_id: 'c_aporte_projeto', valor_planejado: 500 }],
+    projetos: [
+      { id: 'p_viagem', nome: 'Viagem de julho', meta_valor: 18000, data_alvo: g.somarMeses(comp, 12) + '-01', valor_inicial: 240, prioridade: 1, status: 'ativo', criado_por: 'u_nina' },
+      { id: 'p_carro', nome: 'Troca do carro', meta_valor: 45000, data_alvo: g.somarMeses(comp, 24) + '-01', valor_inicial: 2800, prioridade: 3, status: 'votação', criado_por: 'u_luiz' },
+    ],
+    aportes,
+    decisoes: [{ id: 'd_carro', titulo: 'Trocar o carro', status: 'aberta', projeto_id: 'p_carro', prazo: g.somarMeses(comp, 1) + '-05' }],
+    votos: [{ decisao_id: 'd_carro', usuario_id: 'u_luiz', voto: 'sim' }, { decisao_id: 'd_carro', usuario_id: 'u_julia', voto: 'sim' }],
+    alertas: [
+      { id: 'al_1', nome: 'Delivery acima de R$ 200/mês', tipo: 'categoria_acima', categoria_id: 'c_delivery', limite: 200, avisar: ['u_luiz', 'u_nina'], ativo: true },
+      { id: 'al_2', nome: 'Nova assinatura detectada', tipo: 'nova_assinatura', limite: 0, avisar: [], ativo: true },
+      { id: 'al_3', nome: 'Mercado acima de R$ 5.000', tipo: 'categoria_acima', categoria_id: 'c_mercado', limite: 5000, avisar: [], ativo: true },
+    ],
+    avisos: [{ id: 'av_semcat', lido: true }],
+  }
+}
+const visaoAdmin = { ver_sensivel: true, uid: 'u_luiz', dependente: false }
+const visaoDep = { ver_sensivel: false, uid: 'u_julia', dependente: true }
+
+console.log('13) Resumo do mês e painel')
+teste('resumo: aporte não conta como despesa; por_tipo e projetos preenchidos', () => {
+  const r = g.calcularResumoMes(bancoTeste(), visaoAdmin, m(1))
+  assert.equal(r.entrou, 9000)
+  assert.equal(r.saiu, 1200.8) // mercado 1000 + netflix 55,90 + delivery 100 + disney 44,90 (aporte de 800 fica fora)
+  assert.equal(r.por_tipo.t_fixas.realizado, 100.8); assert.equal(r.por_tipo.t_variaveis.realizado, 1100)
+  assert.equal(r.por_tipo.t_receitas.orcado, 9000) // receita do mês anterior
+  assert.equal(r.por_tipo.t_projetos.realizado, r.projetos.guardado_total)
+  assert.equal(r.projetos.ativos, 1); assert.ok(r.projetos.guardado_total > 240 + 800 * 11)
+  assert.equal(r.por_grupo.g_alimentacao.realizado, 1100)
+})
+teste('resumo: orçamento soma por tipo e por grupo', () => {
+  const r = g.calcularResumoMes(bancoTeste(), visaoAdmin, comp)
+  assert.equal(r.por_tipo.t_variaveis.orcado, 1500); assert.equal(r.por_grupo.g_alimentacao.orcado, 1500); assert.equal(r.por_categoria.c_delivery.orcado, 300)
+  assert.equal(r.por_usuario.u_nina, 129.8)
+})
+teste('resumo: Dependente sem dependente_ve_salarios não vê salários', () => { assert.equal(g.calcularResumoMes(bancoTeste(), visaoDep, m(1)).entrou, 0) })
+teste('painel: meses futuros previstos (média 3 meses; dezembro ×1,5; despesas = orçamento sem aportes)', () => {
+  const ano = Number(comp.slice(0, 4)) + 1
+  const p = g.calcularPainel(bancoTeste(), visaoAdmin, ano, '', hoje)
+  assert.equal(p.ano, ano); assert.equal(p.meses.length, 12)
+  assert.ok(p.meses.every((x) => x.previsto === true))
+  assert.equal(p.meses[0].salarios, 9000); assert.equal(p.meses[11].salarios, 13500)
+  assert.equal(p.meses[0].despesas, 1500); assert.equal(p.meses[0].por_tipo.t_variaveis, 1500); assert.equal(p.meses[0].por_grupo_analise['Alimentação'], 1500)
+  assert.equal(p.meses[0].saldo, 9000 - 1500)
+})
+teste('painel: mês realizado traz por_tipo, por_grupo_analise e por_categoria', () => {
+  const ano = Number(comp.slice(0, 4))
+  const p = g.calcularPainel(bancoTeste(), visaoAdmin, ano, '', hoje)
+  const mes = p.meses.find((x) => x.competencia === comp)
+  assert.equal(mes.previsto, false); assert.equal(mes.por_categoria.c_delivery, 300); assert.equal(mes.por_grupo_analise['Alimentação'], 1300)
+  assert.equal(mes.por_tipo.t_variaveis, 1300 + 129.8); assert.equal(mes.por_categoria.c_aporte_projeto, undefined)
+  assert.ok(p.poupanca_projetos.length === 12 && p.poupanca_projetos[11].total > 0)
+  assert.equal(p.orcado_por_categoria.c_mercado, 1200)
+})
+
+console.log('14) Projetos calculados')
+teste('comProjetoCalculado: no ritmo, necessário/mês, votos', () => {
+  const d = bancoTeste()
+  const pc = g.comProjetoCalculado(d, d.projetos[0], hoje)
+  assert.equal(pc.valor_atual, 240 + 800 * 12); assert.equal(pc.media_3m, 800)
+  assert.equal(pc.necessario_mes, Math.round((18000 - pc.valor_atual) / 12)); assert.equal(pc.situacao, 'no_ritmo'); assert.equal(pc.atraso, 0)
+  const pv = g.comProjetoCalculado(d, d.projetos[1], hoje)
+  assert.equal(pv.situacao, 'votacao'); assert.equal(pv.votos_sim, 2); assert.equal(pv.votos_total, 2); assert.equal(pv.aguardando, 2)
+})
+teste('projetarMeta com corte mensal', () => {
+  const d = bancoTeste()
+  const pm = g.projetarMeta(d, d.projetos[0], 130, hoje)
+  assert.equal(pm.ritmo_considerado, 930); assert.equal(pm.falta, 18000 - 9840); assert.equal(pm.meses_no_ritmo, Math.ceil(8160 / 930)); assert.equal(pm.no_prazo, true)
+})
+
+console.log('15) Próximas saídas, vigia e alertas')
+teste('proximas_saidas: conta lida do e-mail, estimada e parcela de cartão', () => {
+  const d = bancoTeste()
+  const s = g.calcularProximasSaidas(d, 60, hoje)
+  assert.ok(s.some((x) => x.id === 'cp1' && x.status === 'lida_do_email' && x.titulo === 'Luz — Copel'))
+  assert.ok(s.some((x) => x.status === 'estimada' && x.titulo === 'Água — Sanepar' && x.valor === 168))
+  const parc = s.find((x) => x.status === 'parcela')
+  assert.ok(parc && /parcela 5\/10/.test(parc.titulo) && parc.valor === 189.9 && parc.data === g.somarMeses(comp, 1) + '-10')
+  assert.ok(s.some((x) => x.status === 'parcial' && /Cartão/.test(x.titulo)))
+  assert.ok(!s.some((x) => x.id === 'cp0'), 'atrasada não entra nas próximas saídas')
+  for (let i = 1; i < s.length; i++) assert.ok(s[i - 1].data <= s[i].data, 'ordenado por data')
+  assert.ok(!g.calcularProximasSaidas(d, 30, hoje).some((x) => x.status === 'estimada' && x.data > g.somarDias(hoje, 30)))
+})
+teste('vigia: gasto fora do padrão (>1,35× média de 3 meses)', () => {
+  const av = g.gerarAvisos(bancoTeste(), hoje)
+  const fora = av.find((a) => a.id === 'av_fora_c_delivery')
+  assert.ok(fora, 'aviso de delivery'); assert.equal(fora.tipo, 'fora_do_padrao'); assert.match(fora.titulo, /^Delivery 200% acima da média/); assert.match(fora.detalhe, /R\$ 300,00/); assert.equal(fora.gravidade, 'red')
+  assert.ok(!av.some((a) => a.id === 'av_fora_c_mercado'), 'mercado estável não gera aviso')
+})
+teste('vigia: cobrança duplicada no cartão', () => {
+  const dup = g.gerarAvisos(bancoTeste(), hoje).find((a) => a.tipo === 'cobranca_duplicada')
+  assert.ok(dup); assert.match(dup.detalhe, /DROGARIA NISSEI R\$ 64,90 duas vezes/); assert.equal(dup.gravidade, 'warn')
+})
+teste('vigia: assinatura nova (Disney) e não a antiga (Netflix)', () => {
+  const av = g.gerarAvisos(bancoTeste(), hoje)
+  assert.ok(av.some((a) => a.id === 'av_ass_DISNEY PLUS' && /DISNEY PLUS R\$ 44,90 desde/.test(a.detalhe)))
+  assert.ok(!av.some((a) => a.id === 'av_ass_NETFLIX COM'))
+  const ass = g.detectarAssinaturas(bancoTeste(), hoje)
+  assert.equal(ass.find((a) => a.loja === 'NETFLIX COM').nova, false); assert.equal(ass.find((a) => a.loja === 'DISNEY PLUS').nova, true)
+})
+teste('vigia: vencimento em 2 dias, atrasada, sem categoria (lido) e alerta personalizado', () => {
+  const av = g.gerarAvisos(bancoTeste(), hoje)
+  const venc = av.find((a) => a.id === 'av_venc_cp1'); assert.ok(venc); assert.match(venc.titulo, /vence em 2 dias/); assert.match(venc.detalhe, /código de barras/)
+  const atr = av.find((a) => a.id === 'av_atr_cp0'); assert.ok(atr); assert.match(atr.titulo, /venceu há 5 dias/); assert.equal(atr.gravidade, 'red')
+  const sem = av.find((a) => a.id === 'av_semcat'); assert.ok(sem); assert.equal(sem.lido, true); assert.match(sem.titulo, /^1 gasto do cartão sem categoria/)
+  const al = av.find((a) => a.id === 'av_al_al_1'); assert.ok(al); assert.equal(al.tipo, 'alerta_personalizado'); assert.match(al.detalhe, /R\$ 300,00 no mês \(limite R\$ 200,00\)/); assert.equal(JSON.stringify(al.avisar), JSON.stringify(['u_luiz', 'u_nina']))
+  assert.ok(av.some((a) => a.id === 'av_al_al_2'), 'alerta de nova assinatura dispara')
+  assert.ok(!av.some((a) => a.id === 'av_al_al_3'), 'alerta abaixo do limite não dispara')
+})
+teste('alertasCalculados: status e percentual', () => {
+  const als = g.alertasCalculados(bancoTeste(), hoje)
+  assert.equal(als[0].status_atual, 'disparado'); assert.equal(als[0].percentual_atual, 150); assert.equal(als[1].status_atual, 'disparado'); assert.equal(als[2].status_atual, 'ok'); assert.equal(als[2].percentual_atual, 20)
+})
+teste('destinatários: alerta → avisar; demais → administradores', () => {
+  const d = bancoTeste()
+  assert.equal(JSON.stringify(g.destinatariosDoAviso({ tipo: 'alerta_personalizado', avisar: ['u_nina'] }, d.usuarios)), JSON.stringify(['u_nina']))
+  assert.equal(JSON.stringify(g.destinatariosDoAviso({ tipo: 'alerta_personalizado', avisar: [] }, d.usuarios)), JSON.stringify(['u_luiz', 'u_nina']))
+  assert.equal(JSON.stringify(g.destinatariosDoAviso({ tipo: 'vencimento' }, d.usuarios)), JSON.stringify(['u_luiz', 'u_nina']))
+})
+teste('analisarTendencias: delivery sobe e há recomendação objetiva', () => {
+  const t = g.analisarTendencias(bancoTeste(), hoje)
+  assert.equal(t.subiram[0].categoria_id, 'c_delivery'); assert.ok(t.subiram[0].variacao >= 50); assert.match(t.recomendacao, /^Delivery caminha para R\$ [\d.,]+ no mês, \d+% acima da média de R\$ [\d.,]+\. Voltar à média liberaria cerca de R\$/)
+})
+teste('markdownParaHtml', () => { assert.equal(g.markdownParaHtml('# T\n- a **b**\n> c'), '<h1>T</h1>\n<ul>\n<li>a <b>b</b></li>\n</ul>\n<blockquote>c</blockquote>') })
+
+console.log('16) Regras de loja')
+teste('regraDaLoja casa por conteúdo e prefere a chave mais longa', () => {
+  const regras = [{ loja_normalizada: 'IFOOD', categoria_id: 'c_delivery' }, { loja_normalizada: 'IFOOD MERCADO', categoria_id: 'c_mercado' }]
+  assert.equal(g.regraDaLoja('IFOOD *PIZZARIA', regras).categoria_id, 'c_delivery')
+  assert.equal(g.regraDaLoja('iFood Mercado Express', regras).categoria_id, 'c_mercado')
+  assert.equal(g.regraDaLoja('PADARIA', regras), null); assert.equal(g.regraDaLoja('', regras), null)
+})
+teste('aplicarRegraLoja põe a categoria aprendida em 1º lugar (máx. 6)', () => {
+  const s = g.aplicarRegraLoja('POSTO SHELL', ['c_combustivel', 'c_app_transporte', 'c_mercado', 'c_padaria', 'c_delivery', 'c_farmacia'], [{ loja_normalizada: 'POSTO SHELL', categoria_id: 'c_manutencao_carro' }])
+  assert.equal(s[0], 'c_manutencao_carro'); assert.equal(s.length, 6); assert.equal(s[1], 'c_combustivel')
+  assert.equal(JSON.stringify(g.aplicarRegraLoja('X', ['c_mercado'], [])), JSON.stringify(['c_mercado']))
+})
+teste('responderLocal aplica a regra da loja ao lançar por texto', () => {
+  const d = bancoTeste(); d.regras_loja = [{ loja_normalizada: 'PADARIA', categoria_id: 'c_restaurantes' }]
+  const r = g.responderLocal(d, visaoAdmin, 'u_luiz', 'gastei 30 na padaria', hoje)
+  assert.equal(r.lancamento.categoria_id, 'c_restaurantes')
+})
+
+console.log('17) Assistente (regras locais, sem chave)')
+teste('1. "Quanto gastamos com delivery este mês?"', () => {
+  const r = g.responderLocal(bancoTeste(), visaoAdmin, 'u_luiz', 'Quanto gastamos com delivery este mês?', hoje)
+  assert.match(r.texto, /\*\*R\$ 300,00\*\* em 1 lançamento de Delivery — 200% acima da média dos últimos 3 meses \(R\$ 100,00\)/)
+  assert.equal(r.barras.length, 2); assert.equal(r.barras[0].valor, 300); assert.equal(r.barras[1].valor, 100); assert.equal(r.barras[1].rotulo, 'Média 3 meses')
+})
+teste('2. "Quais assinaturas temos?"', () => {
+  const r = g.responderLocal(bancoTeste(), visaoAdmin, 'u_luiz', 'Quais assinaturas temos?', hoje)
+  assert.match(r.texto, /Temos 2 assinaturas este mês, somando \*\*R\$ 100,80\*\*/); assert.match(r.texto, /Netflix \(R\$ 55,90\)/); assert.equal(r.barras.length, 2); assert.equal(r.barras[0].cor, 'rose')
+})
+teste('3. "Contas que vencem esta semana"', () => {
+  const r = g.responderLocal(bancoTeste(), visaoAdmin, 'u_luiz', 'Contas que vencem esta semana', hoje)
+  assert.match(r.texto, /Luz — Copel \(R\$ 412,00, dia \d{2}\)/); assert.match(r.texto, /Total \*\*R\$/)
+})
+teste('4. "Como fechamos <mês passado>?"', () => {
+  const r = g.responderLocal(bancoTeste(), visaoAdmin, 'u_luiz', 'Como fechamos ' + g.nomeMes(m(1)) + '?', hoje)
+  assert.ok(r.texto.startsWith(g.nomeCompetencia(m(1)) + ': entrou **R$ 9.000,00**, saiu **R$ 1.200,80** e sobrou **R$ 7.799,20**'), r.texto)
+  assert.match(r.texto, /Despesas fixas R\$ 100,80 e variáveis R\$ 1.100,00/); assert.equal(r.barras[0].rotulo, 'Receitas'); assert.equal(r.barras[1].valor, 1200.8)
+})
+teste('5. "gastei 45 na padaria no pix" lança', () => {
+  const r = g.responderLocal(bancoTeste(), visaoAdmin, 'u_luiz', 'gastei 45 na padaria no pix', hoje)
+  assert.equal(r.etiqueta, 'lançado'); assert.equal(r.lancamento.valor, 45); assert.equal(r.lancamento.categoria_id, 'c_padaria'); assert.equal(r.lancamento.forma_pgto, 'pix'); assert.equal(r.lancamento.usuario_id, 'u_luiz'); assert.equal(r.lancamento.origem, 'chat')
+  assert.match(r.texto, /^Lancei \*\*R\$ 45,00 · Padaria\*\* \(Despesas variáveis › Alimentação\), hoje, Pix, por Luiz\./)
+  assert.match(g.responderLocal(bancoTeste(), visaoAdmin, 'u_luiz', 'gastei na padaria', hoje).texto, /Não entendi o valor/)
+})
+teste('encontrarCategoriaNoTexto respeita fronteira de palavra', () => {
+  const cats = g.dadosIniciaisCategorias()
+  assert.equal(g.encontrarCategoriaNoTexto('QUANTO GASTAMOS COM DELIVERY ESTE MES', cats).id, 'c_delivery')
+  assert.equal(g.encontrarCategoriaNoTexto('QUANTO GASTAMOS DE GAS', cats).id, 'c_gas')
+  assert.equal(g.encontrarCategoriaNoTexto('QUANTO GASTAMOS NO POSTO SHELL', cats).id, 'c_combustivel')
+  assert.equal(g.encontrarCategoriaNoTexto('BOM DIA', cats), null)
+})
+teste('6. "Onde podemos economizar?" e 7. projeto', () => {
+  const r = g.responderLocal(bancoTeste(), visaoAdmin, 'u_luiz', 'Onde podemos economizar?', hoje)
+  assert.match(r.texto, /\*\*Delivery\*\* \(R\$ 300,00 contra R\$ 100,00\)/); assert.ok(r.barras.length >= 1)
+  const p = g.responderLocal(bancoTeste(), visaoAdmin, 'u_luiz', 'Dá para fechar a viagem de julho?', hoje)
+  assert.match(p.texto, /No ritmo atual \(R\$ 800,00\/mês\) o projeto \*\*Viagem de julho\*\* chega a 100% da meta/); assert.match(p.texto, /Faltam R\$ 8\.160,00/)
+  assert.match(g.responderLocal(bancoTeste(), visaoAdmin, 'u_luiz', 'bom dia', hoje).texto, /Posso responder sobre gastos por categoria/)
+})
+teste('Dependente não vê salários no fechamento', () => { assert.match(g.responderLocal(bancoTeste(), visaoDep, 'u_julia', 'como fechamos ' + g.nomeMes(m(1)) + '?', hoje).texto, /entrou \*\*R\$ 0,00\*\*/) })
+teste('sugestões contextuais', () => {
+  const s = g.sugestoesAssistente(bancoTeste(), visaoAdmin, hoje)
+  assert.ok(s.length >= 5 && s.length <= 6); assert.equal(s[0], 'Quanto gastamos com delivery este mês?'); assert.ok(s.includes('Quais assinaturas temos?')); assert.ok(s.includes('Contas que vencem esta semana')); assert.ok(s.some((x) => /Viagem de julho/.test(x)))
+})
+teste('resumo agregado: sem dados pessoais além do apelido', () => {
+  const r = g.montarResumoAgregado(bancoTeste(), visaoAdmin, hoje)
+  assert.equal(r.meses.length, 12); assert.equal(r.membros[0].apelido, 'Luiz'); assert.equal(Object.keys(r.membros[0]).sort().join(','), 'apelido,id,perfil')
+  assert.equal(r.medias_3m_por_categoria.c_delivery, 100); assert.ok(r.projetos[0].necessario_mes > 0); assert.ok(r.assinaturas.length >= 2)
+  assert.ok(!JSON.stringify(r).includes('token') && !JSON.stringify(r).includes('pin_'))
+})
+teste('ferramentas do Claude: 5 definidas com input_schema', () => {
+  const f = g.ferramentasAssistente()
+  assert.equal(f.map((x) => x.name).join(','), 'buscar_lancamentos,total_por_categoria,projetar_meta,lancar_despesa,proximas_saidas')
+  for (const x of f) assert.equal(x.input_schema.type, 'object')
+})
+teste('extrairBarras tira a linha JSON final', () => {
+  const r = g.extrairBarras('Em outubro foram R$ 300,00 contra R$ 100,00 de média.\n{"barras":[{"rotulo":"Outubro","valor":300,"cor":"magenta"},{"rotulo":"Média","valor":100,"cor":"indigo"},{"rotulo":"x","valor":"abc"}]}')
+  assert.equal(r.texto, 'Em outubro foram R$ 300,00 contra R$ 100,00 de média.'); assert.equal(r.barras.length, 2); assert.equal(r.barras[0].cor, 'magenta')
+  assert.equal(g.extrairBarras('Só texto.').barras, undefined); assert.equal(g.extrairBarras('Texto\n{"barras": "nada"}').texto, 'Texto\n{"barras": "nada"}')
+})
+teste('historicoParaMensagens alterna papéis e começa pelo usuário', () => {
+  const h = g.historicoParaMensagens([{ papel: 'assistente', texto: 'oi' }, { papel: 'eu', texto: 'a' }, { papel: 'eu', texto: 'b' }, { papel: 'assistente', texto: 'c' }])
+  assert.equal(JSON.stringify(h), JSON.stringify([{ role: 'user', content: 'a\nb' }, { role: 'assistant', content: 'c' }]))
+})
+
+console.log('18) Telegram')
+teste('parsearComandoStart', () => {
+  assert.equal(g.parsearComandoStart('/start 123456'), '123456'); assert.equal(g.parsearComandoStart('/start@FamiliaBot 654321'), '654321'); assert.equal(g.parsearComandoStart('/START=111222'), '111222')
+  assert.equal(g.parsearComandoStart('/start'), ''); assert.equal(g.parsearComandoStart('/start 12'), ''); assert.equal(g.parsearComandoStart('gastei 45 na padaria'), null); assert.equal(g.parsearComandoStart('/startar 123456'), null)
+})
+teste('textoParaTelegram converte **negrito** e tira crases', () => assert.equal(g.textoParaTelegram('Lancei **R$ 45,00** `x`'), "Lancei *R$ 45,00* 'x'"))
+teste('cardapioParaPrompt lista id, nome, grupo e ícone sem itens ocultos', () => {
+  const t = g.cardapioParaPrompt(g.dadosIniciaisCategorias(), g.dadosIniciaisGrupos())
+  assert.match(t, /- c_mercado: Supermercado \(Alimentação, shopping-cart\)/); assert.ok(!t.includes('c_aporte_projeto'))
+})
 
 console.log(`\n${total - falhas}/${total} testes passaram${falhas ? ` — ${falhas} FALHA(S)` : ''}`)
 process.exit(falhas ? 1 : 0)

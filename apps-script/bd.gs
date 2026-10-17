@@ -12,6 +12,9 @@
  *    (gravamos datas como TEXTO para não sofrer com fuso horário).
  *
  * Nenhuma regra de negócio aqui — só leitura e gravação.
+ *
+ * Versão 2: abas Tipos, RegrasLoja, Alertas, Patrimonio, Avisos, Conversas e Telegram;
+ * Grupos e Categorias ganharam tipo_id, grupo_analise e cor da paleta (ver app/src/tipos/index.ts).
  */
 
 /** Nome da planilha criada por instalar(). */
@@ -32,11 +35,13 @@ const ESQUEMA = {
     colunas: ['id', 'nome', 'apelido', 'avatar', 'cor', 'perfil', 'ativo', 'criado_em', 'ultimo_acesso', 'mesada_mensal', 'token', 'pin_hash', 'pin_sal', 'origem'],
     numeros: ['mesada_mensal'], booleanos: ['ativo'], cachear: true,
   },
-  Grupos: { colunas: ['id', 'nome', 'icone', 'cor', 'ordem', 'tipo'], numeros: ['ordem'], cachear: true },
+  Tipos: { colunas: ['id', 'nome', 'icone', 'cor', 'ordem'], numeros: ['ordem'], cachear: true },
+  Grupos: { colunas: ['id', 'tipo_id', 'nome', 'cor', 'grupo_analise', 'ordem', 'ativo'], numeros: ['ordem'], booleanos: ['ativo'], cachear: true },
   Categorias: {
-    colunas: ['id', 'grupo_id', 'nome', 'icone', 'cor', 'tipo', 'fixa', 'orcamento_mensal', 'palavras_chave', 'ativa', 'subgrupo', 'sensivel'],
-    numeros: ['orcamento_mensal'], booleanos: ['fixa', 'ativa', 'sensivel'], cachear: true,
+    colunas: ['id', 'tipo_id', 'grupo_id', 'nome', 'icone', 'cor', 'tipo', 'fixa', 'orcamento_mensal', 'palavras_chave', 'grupo_analise', 'sensivel', 'oculta_cardapio', 'ativa'],
+    numeros: ['orcamento_mensal'], booleanos: ['fixa', 'ativa', 'sensivel', 'oculta_cardapio'], cachear: true,
   },
+  RegrasLoja: { colunas: ['id', 'loja_normalizada', 'categoria_id', 'criado_por', 'criado_em', 'acertos'], numeros: ['acertos'], cachear: true },
   Lancamentos: {
     colunas: ['id', 'data', 'competencia', 'tipo', 'valor', 'categoria_id', 'descricao', 'estabelecimento', 'forma_pgto', 'cartao_id', 'parcela', 'usuario_id', 'origem', 'anexo_url', 'status', 'hash_dedup', 'criado_em', 'editado_por', 'excluido', 'projeto_id'],
     numeros: ['valor'], booleanos: ['excluido'], datas: ['data'], cachear: true,
@@ -70,12 +75,25 @@ const ESQUEMA = {
   Votos: { colunas: ['decisao_id', 'usuario_id', 'voto', 'comentario', 'data'], cachear: true },
   Versiculos: { colunas: ['id', 'referencia', 'texto', 'tema'], cachear: true },
   Reunioes: { colunas: ['id', 'competencia', 'data', 'pauta', 'decidido', 'oracao_gratidao', 'criado_por'], datas: ['data'], cachear: true },
+  // Alertas personalizados ("Delivery acima de R$ 400/mês → avisar Luiz e Nina"). `avisar` = lista de usuario_id (vazia = todos).
+  Alertas: {
+    colunas: ['id', 'nome', 'tipo', 'categoria_id', 'grupo_id', 'limite', 'avisar', 'ativo', 'ultimo_disparo'],
+    numeros: ['limite'], listas: ['avisar'], booleanos: ['ativo'], cachear: true,
+  },
+  // Patrimônio manual. `saldos` é JSON: [{"competencia":"2026-10","valor":1234.5}].
+  Patrimonio: { colunas: ['id', 'nome', 'tipo', 'instituicao', 'titular_id', 'saldos', 'ativo'], booleanos: ['ativo'], cachear: true },
+  // Avisos gerados pelas rotinas (vigia, quinzenal, fechamento). `acao` é JSON {rotulo, rota}.
+  Avisos: { colunas: ['id', 'data', 'tipo', 'titulo', 'detalhe', 'gravidade', 'acao', 'lido', 'usuario_id'], booleanos: ['lido'], cachear: true },
+  // Histórico do assistente por usuário. `barras` e `lancamento` em JSON.
+  Conversas: { colunas: ['id', 'usuario_id', 'papel', 'texto', 'data', 'barras', 'lancamento_id', 'etiqueta'], cachear: true },
+  // Vínculo chat do Telegram ↔ usuário (codigo de 6 dígitos até ser usado).
+  Telegram: { colunas: ['usuario_id', 'chat_id', 'codigo', 'vinculado_em', 'ativo'], booleanos: ['ativo'], cachear: true },
   Push: { colunas: ['usuario_id', 'assinatura', 'criado_em'], cachear: false },
   Log: { colunas: ['data', 'usuario_id', 'acao', 'detalhe'], cachear: false },
 };
 
 /** Ordem em que as abas são criadas na planilha. */
-const ORDEM_ABAS = ['Config', 'Usuarios', 'Grupos', 'Categorias', 'Lancamentos', 'ContasFixas', 'ContasAPagar', 'Cartoes', 'CaixaEntrada', 'Orcamento', 'Projetos', 'Aportes', 'Decisoes', 'Votos', 'Versiculos', 'Reunioes', 'Push', 'Log'];
+const ORDEM_ABAS = ['Config', 'Usuarios', 'Tipos', 'Grupos', 'Categorias', 'RegrasLoja', 'Lancamentos', 'ContasFixas', 'ContasAPagar', 'Cartoes', 'CaixaEntrada', 'Orcamento', 'Projetos', 'Aportes', 'Decisoes', 'Votos', 'Alertas', 'Patrimonio', 'Avisos', 'Conversas', 'Telegram', 'Versiculos', 'Reunioes', 'Push', 'Log'];
 
 /** Cache em memória válido só durante esta execução. */
 const _memoria = { planilha: null, abas: {}, dados: {} };
@@ -406,7 +424,7 @@ function removerLinhas(nome, filtro) {
 
 /** Campos numéricos e booleanos da Config (os demais são texto). */
 const CONFIG_NUMEROS = ['dia_fechamento_mes', 'divisao_dar', 'divisao_poupar', 'divisao_viver', 'valor_gasto_grande'];
-const CONFIG_BOOLEANOS = ['fe_ativa', 'junior_ve_salarios'];
+const CONFIG_BOOLEANOS = ['fe_ativa', 'dependente_ve_salarios', 'junior_ve_salarios', 'rotina_vigia', 'rotina_quinzenal', 'rotina_fechamento', 'telegram_ativo'];
 
 /** Valores padrão da Config (gravados em instalar()). */
 function configPadrao(sobrenome) {
@@ -425,7 +443,11 @@ function configPadrao(sobrenome) {
     divisao_viver: 75,
     valor_gasto_grande: 1000,
     regra_votacao: 'maioria_mais_pais',
-    junior_ve_salarios: false,
+    dependente_ve_salarios: false,
+    rotina_vigia: true,
+    rotina_quinzenal: true,
+    rotina_fechamento: true,
+    telegram_ativo: false,
     url_planilha: '',
     url_pasta_drive: '',
   };
@@ -443,6 +465,9 @@ function lerConfigCompleta() {
     else v = v === null || v === undefined ? '' : String(v);
     cfg[chave] = v;
   });
+  // Planilha v1: a chave antiga junior_ve_salarios vale como dependente_ve_salarios.
+  if (cfg.dependente_ve_salarios === undefined && cfg.junior_ve_salarios !== undefined) cfg.dependente_ve_salarios = cfg.junior_ve_salarios;
+  delete cfg.junior_ve_salarios;
   return cfg;
 }
 

@@ -6,17 +6,21 @@
  *  - Autentica: token_familia (aba Config) → token do usuário (aba Usuarios) → aplica o perfil.
  *  - Responde sempre no envelope { ok, dados, erro, versao } em JSON.
  *  - `?webhook=1` (GET ou POST) vai para o webhook de SMS em sms.gs.
+ *  - `?telegram=1` (POST) vai para o webhook do bot do Telegram em telegram.gs.
  *  - Ações de escrita são registradas na aba Log.
+ *
+ * Perfis (versão 2): Administrador, Adulto e Dependente (chamado "Júnior" na versão 1 —
+ * planilhas antigas continuam funcionando, o nome é convertido na leitura).
  *
  * Mensagens de erro são em português e aparecem na tela do app. Três delas são
  * "contratuais" (o app reage a elas): "Sessão expirada", "Sem permissão", "Família não encontrada".
  */
 
-/** Hierarquia dos perfis: quem tem nível maior pode tudo que o menor pode. */
-const NIVEL_PERFIL = { 'Júnior': 1, 'Adulto': 2, 'Administrador': 3 };
+/** Hierarquia dos perfis: quem tem nível maior pode tudo que o menor pode. "Júnior" é sinônimo antigo. */
+const NIVEL_PERFIL = { 'Dependente': 1, 'Júnior': 1, 'Adulto': 2, 'Administrador': 3 };
 
 /** Parâmetros que nunca vão para o Log (segredos e arquivos grandes). */
-const PARAMS_OCULTOS_LOG = ['token', 'token_familia', 'pin', 'imagem_base64', 'svg', 'texto', 'assinatura'];
+const PARAMS_OCULTOS_LOG = ['token', 'token_familia', 'pin', 'imagem_base64', 'svg', 'texto', 'assinatura', 'mensagem', 'historico'];
 
 /**
  * Tabela de ações: nome → { perfil mínimo (null = sem autenticação), fn(p, ctx), escrita }.
@@ -31,68 +35,87 @@ function obterAcoes() {
     entrar_pin: { perfil: null, fn: acaoEntrarPin },
 
     // Carga inicial e lançamentos
-    bootstrap: { perfil: 'Júnior', fn: acaoBootstrap },
-    resumo_mes: { perfil: 'Júnior', fn: acaoResumoMes },
-    listar_lancamentos: { perfil: 'Júnior', fn: acaoListarLancamentos },
-    salvar_lancamento: { perfil: 'Júnior', fn: acaoSalvarLancamento, escrita: true },
-    excluir_lancamento: { perfil: 'Júnior', fn: acaoExcluirLancamento, escrita: true },
-    desfazer_exclusao: { perfil: 'Júnior', fn: acaoDesfazerExclusao, escrita: true },
+    bootstrap: { perfil: 'Dependente', fn: acaoBootstrap },
+    resumo_mes: { perfil: 'Dependente', fn: acaoResumoMes },
+    listar_lancamentos: { perfil: 'Dependente', fn: acaoListarLancamentos },
+    salvar_lancamento: { perfil: 'Dependente', fn: acaoSalvarLancamento, escrita: true },
+    excluir_lancamento: { perfil: 'Dependente', fn: acaoExcluirLancamento, escrita: true },
+    desfazer_exclusao: { perfil: 'Dependente', fn: acaoDesfazerExclusao, escrita: true },
     painel: { perfil: 'Adulto', fn: acaoPainel },
-    listar_categorias: { perfil: 'Júnior', fn: acaoListarCategorias },
+    listar_categorias: { perfil: 'Dependente', fn: acaoListarCategorias },
     salvar_categoria: { perfil: 'Administrador', fn: acaoSalvarCategoria, escrita: true },
     salvar_grupo: { perfil: 'Administrador', fn: acaoSalvarGrupo, escrita: true },
+    listar_regras_loja: { perfil: 'Dependente', fn: acaoListarRegrasLoja },
+    salvar_regra_loja: { perfil: 'Dependente', fn: acaoSalvarRegraLoja, escrita: true },
     listar_orcamento: { perfil: 'Adulto', fn: acaoListarOrcamento },
     salvar_orcamento: { perfil: 'Administrador', fn: acaoSalvarOrcamento, escrita: true },
     copiar_orcamento: { perfil: 'Administrador', fn: acaoCopiarOrcamento, escrita: true },
-    mesada: { perfil: 'Júnior', fn: acaoMesada },
+    mesada: { perfil: 'Dependente', fn: acaoMesada },
     exportar: { perfil: 'Administrador', fn: acaoExportar, escrita: true },
     log: { perfil: 'Administrador', fn: acaoLog },
 
     // Leitura inteligente
-    ler_imagem: { perfil: 'Júnior', fn: acaoLerImagem, escrita: true },
-    ler_texto: { perfil: 'Júnior', fn: acaoLerTexto },
-    consultar_nfce: { perfil: 'Júnior', fn: acaoConsultarNfce },
+    ler_imagem: { perfil: 'Dependente', fn: acaoLerImagem, escrita: true },
+    ler_texto: { perfil: 'Dependente', fn: acaoLerTexto },
+    consultar_nfce: { perfil: 'Dependente', fn: acaoConsultarNfce },
 
-    // Contas da casa
+    // Contas da casa e previsão de saídas
     listar_contas_fixas: { perfil: 'Adulto', fn: acaoListarContasFixas },
     salvar_conta_fixa: { perfil: 'Administrador', fn: acaoSalvarContaFixa, escrita: true },
     listar_contas_a_pagar: { perfil: 'Adulto', fn: acaoListarContasAPagar },
     salvar_conta_a_pagar: { perfil: 'Adulto', fn: acaoSalvarContaAPagar, escrita: true },
     marcar_conta_paga: { perfil: 'Adulto', fn: acaoMarcarContaPaga, escrita: true },
     consumo_historico: { perfil: 'Adulto', fn: acaoConsumoHistorico },
+    proximas_saidas: { perfil: 'Adulto', fn: acaoProximasSaidas },
 
     // Cartões e caixa de entrada
     listar_cartoes: { perfil: 'Adulto', fn: acaoListarCartoes },
     salvar_cartao: { perfil: 'Administrador', fn: acaoSalvarCartao, escrita: true },
-    listar_caixa_entrada: { perfil: 'Júnior', fn: acaoListarCaixaEntrada },
-    resolver_caixa_entrada: { perfil: 'Júnior', fn: acaoResolverCaixaEntrada, escrita: true },
+    listar_caixa_entrada: { perfil: 'Dependente', fn: acaoListarCaixaEntrada },
+    resolver_caixa_entrada: { perfil: 'Dependente', fn: acaoResolverCaixaEntrada, escrita: true },
     importar_fatura: { perfil: 'Adulto', fn: acaoImportarFatura },
     confirmar_importacao: { perfil: 'Adulto', fn: acaoConfirmarImportacao, escrita: true },
 
-    // Família: sonhos, conselho, reunião
-    listar_projetos: { perfil: 'Júnior', fn: acaoListarProjetos },
-    salvar_projeto: { perfil: 'Júnior', fn: acaoSalvarProjeto, escrita: true }, // Júnior só cria/edita o próprio sonho (checado na função)
-    aportar: { perfil: 'Júnior', fn: acaoAportar, escrita: true },
-    listar_aportes: { perfil: 'Júnior', fn: acaoListarAportes },
-    listar_decisoes: { perfil: 'Júnior', fn: acaoListarDecisoes },
-    salvar_decisao: { perfil: 'Júnior', fn: acaoSalvarDecisao, escrita: true },
-    votar: { perfil: 'Júnior', fn: acaoVotar, escrita: true },
+    // Família: projetos, decisões, reunião
+    listar_projetos: { perfil: 'Dependente', fn: acaoListarProjetos },
+    salvar_projeto: { perfil: 'Dependente', fn: acaoSalvarProjeto, escrita: true }, // Dependente só cria/edita o próprio (checado na função)
+    aportar: { perfil: 'Dependente', fn: acaoAportar, escrita: true },
+    listar_aportes: { perfil: 'Dependente', fn: acaoListarAportes },
+    listar_decisoes: { perfil: 'Dependente', fn: acaoListarDecisoes },
+    salvar_decisao: { perfil: 'Dependente', fn: acaoSalvarDecisao, escrita: true },
+    votar: { perfil: 'Dependente', fn: acaoVotar, escrita: true },
     encerrar_decisao: { perfil: 'Administrador', fn: acaoEncerrarDecisao, escrita: true },
     pauta_reuniao: { perfil: 'Adulto', fn: acaoPautaReuniao },
     salvar_reuniao: { perfil: 'Adulto', fn: acaoSalvarReuniao, escrita: true },
-    versiculo_do_dia: { perfil: 'Júnior', fn: acaoVersiculoDoDia },
+    listar_reunioes: { perfil: 'Adulto', fn: acaoListarReunioes },
+    relatorio_mensal: { perfil: 'Adulto', fn: acaoRelatorioMensal },
+    versiculo_do_dia: { perfil: 'Dependente', fn: acaoVersiculoDoDia },
+
+    // Assistente, avisos, alertas e patrimônio (versão 2)
+    assistente: { perfil: 'Dependente', fn: acaoAssistente, escrita: true },
+    assistente_sugestoes: { perfil: 'Dependente', fn: acaoAssistenteSugestoes },
+    listar_conversa: { perfil: 'Dependente', fn: acaoListarConversa },
+    listar_avisos: { perfil: 'Adulto', fn: acaoListarAvisos },
+    marcar_aviso_lido: { perfil: 'Adulto', fn: acaoMarcarAvisoLido, escrita: true },
+    listar_alertas: { perfil: 'Adulto', fn: acaoListarAlertas },
+    salvar_alerta: { perfil: 'Adulto', fn: acaoSalvarAlerta, escrita: true },
+    excluir_alerta: { perfil: 'Adulto', fn: acaoExcluirAlerta, escrita: true },
+    listar_patrimonio: { perfil: 'Adulto', fn: acaoListarPatrimonio },
+    salvar_patrimonio: { perfil: 'Administrador', fn: acaoSalvarPatrimonio, escrita: true },
+    registrar_saldo_patrimonio: { perfil: 'Adulto', fn: acaoRegistrarSaldoPatrimonio, escrita: true },
+    vincular_telegram: { perfil: 'Dependente', fn: acaoVincularTelegram, escrita: true },
 
     // Usuários, configuração e arquivos
     listar_usuarios: { perfil: 'Adulto', fn: acaoListarUsuarios },
     salvar_usuario: { perfil: 'Administrador', fn: acaoSalvarUsuario, escrita: true },
     gerar_convite: { perfil: 'Administrador', fn: acaoGerarConvite, escrita: true },
-    renovar_token: { perfil: 'Júnior', fn: acaoRenovarToken, escrita: true },
+    renovar_token: { perfil: 'Dependente', fn: acaoRenovarToken, escrita: true },
     redefinir_pin: { perfil: 'Administrador', fn: acaoRedefinirPin, escrita: true },
     salvar_config: { perfil: 'Administrador', fn: acaoSalvarConfig, escrita: true },
     enviar_arquivo: { perfil: 'Adulto', fn: acaoEnviarArquivo, escrita: true },
     salvar_brasao_svg: { perfil: 'Administrador', fn: acaoSalvarBrasaoSvg, escrita: true },
     backup_agora: { perfil: 'Administrador', fn: acaoBackupAgora, escrita: true },
-    registrar_push: { perfil: 'Júnior', fn: acaoRegistrarPush, escrita: true },
+    registrar_push: { perfil: 'Dependente', fn: acaoRegistrarPush, escrita: true },
   };
 }
 
@@ -127,9 +150,12 @@ function extrairParametros(e, metodo) {
   return params;
 }
 
-/** Decide entre webhook e ação normal; nunca deixa uma exceção escapar sem envelope. */
+/** Decide entre webhook de SMS, webhook do Telegram e ação normal; nunca deixa uma exceção escapar sem envelope. */
 function tratarRequisicao(e, metodo) {
   try {
+    const parametrosUrl = (e && e.parameter) || {};
+    // O Telegram envia o "update" como JSON no corpo; o sinal vem só na URL (?telegram=1).
+    if (String(parametrosUrl.telegram || '') === '1') return { ok: true, dados: tratarWebhookTelegram(e, parametrosUrl), versao: VERSAO_API };
     const params = extrairParametros(e, metodo);
     if (String(params.webhook || '') === '1') return { ok: true, dados: tratarWebhook(params), versao: VERSAO_API };
     return executarAcao(params);
@@ -147,6 +173,16 @@ function envelopeErro(erro) {
 
 // ---------- Roteamento e autenticação ----------
 
+/** Monta o contexto de execução para um usuário já carregado (usado pela API e pelo Telegram). */
+function contextoPara(usuario, p) {
+  const perfil = usuario ? normalizarPerfil(usuario.perfil) : '';
+  return {
+    p: p || {}, usuario: usuario || null, uid: usuario ? usuario.id : '', perfil,
+    ehDependente: perfil === 'Dependente', ehJunior: perfil === 'Dependente', // ehJunior: nome antigo, mantido por compatibilidade
+    ehAdmin: perfil === 'Administrador', config: lerConfig(),
+  };
+}
+
 /** Executa uma ação do contrato com autenticação e perfil. */
 function executarAcao(p) {
   const nome = String(p.acao || '');
@@ -154,7 +190,7 @@ function executarAcao(p) {
   const def = obterAcoes()[nome];
   if (!def) throw new ErroUsuario('Ação desconhecida: ' + nome);
 
-  const ctx = { p, usuario: null, uid: '', perfil: '', ehJunior: false, ehAdmin: false, config: null };
+  let ctx = { p, usuario: null, uid: '', perfil: '', ehDependente: false, ehJunior: false, ehAdmin: false, config: null };
 
   if (nome !== 'ping') {
     validarTokenFamilia(p.token_familia);
@@ -162,11 +198,7 @@ function executarAcao(p) {
   }
   if (def.perfil) {
     const usuario = autenticarUsuario(p.token, p.usuario_id);
-    ctx.usuario = usuario;
-    ctx.uid = usuario.id;
-    ctx.perfil = usuario.perfil;
-    ctx.ehJunior = usuario.perfil === 'Júnior';
-    ctx.ehAdmin = usuario.perfil === 'Administrador';
+    ctx = contextoPara(usuario, p);
     exigirPerfil(ctx, def.perfil);
   }
 
@@ -216,31 +248,41 @@ function resumirParaLog(p) {
 
 // ---------- Ajudantes de perfil usados por várias ações ----------
 
-/** Ids das categorias sensíveis (salários) que o Júnior não vê. */
+/** Ids das categorias sensíveis (salários) que o Dependente não vê. */
 function idsCategoriasSensiveis() {
   return lerAba('Categorias').filter((c) => c.sensivel).map((c) => c.id);
 }
 
-/** Júnior pode ver dados sensíveis? (configuração junior_ve_salarios) */
-function juniorVeSensivel(ctx) {
-  return !ctx.ehJunior || !!(ctx.config && ctx.config.junior_ve_salarios);
+/** Dependente pode ver dados sensíveis? (configuração dependente_ve_salarios) */
+function dependenteVeSensivel(ctx) {
+  return !ctx.ehDependente || !!(ctx.config && ctx.config.dependente_ve_salarios);
 }
 
-/** Remove lançamentos de categorias sensíveis quando o usuário é Júnior. */
+/** Nome antigo (v1) de dependenteVeSensivel — mantido para quem ainda chamar. */
+function juniorVeSensivel(ctx) {
+  return dependenteVeSensivel(ctx);
+}
+
+/** Remove lançamentos de categorias sensíveis quando o usuário é Dependente. */
 function filtrarSensivel(ctx, lancamentos) {
-  if (juniorVeSensivel(ctx)) return lancamentos;
+  if (dependenteVeSensivel(ctx)) return lancamentos;
   const sensiveis = idsCategoriasSensiveis();
   return lancamentos.filter((l) => sensiveis.indexOf(l.categoria_id) < 0);
 }
 
 /** Categorias ativas visíveis para o usuário. */
 function categoriasVisiveis(ctx) {
-  return lerAba('Categorias').filter((c) => c.ativa && (juniorVeSensivel(ctx) || !c.sensivel));
+  return lerAba('Categorias').filter((c) => c.ativa && (dependenteVeSensivel(ctx) || !c.sensivel));
 }
 
 /** Lançamentos não excluídos. */
 function lancamentosAtivos() {
   return lerAba('Lancamentos').filter((l) => !l.excluido);
+}
+
+/** Contexto "de sistema" (sem usuário) para as rotinas automáticas: vê tudo. */
+function contextoSistema() {
+  return { p: {}, usuario: null, uid: '', perfil: 'Administrador', ehDependente: false, ehJunior: false, ehAdmin: true, config: lerConfig() };
 }
 
 // ---------- ping ----------

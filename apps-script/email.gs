@@ -80,7 +80,7 @@ function processarThreadConta(thread) {
 /** Alertas de compra por e-mail → parser de SMS → CaixaEntrada (membro pelo final do cartão). */
 function processarThreadAlerta(thread) {
   let gravados = 0;
-  const admin = lerAba('Usuarios').find((u) => u.perfil === 'Administrador' && u.ativo) || null;
+  const admin = lerAba('Usuarios').find((u) => normalizarPerfil(u.perfil) === 'Administrador' && u.ativo) || null;
   thread.getMessages().forEach((msg) => {
     const texto = (msg.getSubject() + '\n' + msg.getPlainBody()).replace(/\s+/g, ' ').slice(0, 2000);
     const r = registrarAlertaNaCaixa(texto, 'email', admin);

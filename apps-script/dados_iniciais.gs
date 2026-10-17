@@ -1,5 +1,6 @@
 /**
- * dados_iniciais.gs — Dados iniciais gravados por instalar(): grupos, categorias e versículos.
+ * dados_iniciais.gs — Dados iniciais gravados por instalar(): tipos, grupos, categorias (cardápio),
+ * grupos de análise, paleta de cores e versículos.
  *
  * ARQUIVO GERADO AUTOMATICAMENTE por apps-script/testes/gerar_dados_iniciais.mjs
  * a partir de dados/grupos_categorias.json e dados/versiculos.json. Não edite à mão:
@@ -8,63 +9,112 @@
  * Versículos: Almeida Revista e Corrigida (domínio público).
  */
 
-/** Grupos (os 5 "cards" da tela inicial). */
-function dadosIniciaisGrupos() {
+/** Os 4 tipos (cards da tela inicial): Receitas, Despesas fixas, Despesas variáveis, Projetos. Nunca aumentam. */
+function dadosIniciaisTipos() {
   return [
-  {"id":"g_entradas","nome":"Entradas","icone":"💰","cor":"#4CB963","ordem":1,"tipo":"receita"},
-  {"id":"g_casa","nome":"Contas da Casa","icone":"🏠","cor":"#5B5BE0","ordem":2,"tipo":"despesa"},
-  {"id":"g_diaadia","nome":"Dia a Dia","icone":"🛒","cor":"#BD55C7","ordem":3,"tipo":"despesa"},
-  {"id":"g_dizimo","nome":"Dízimo e Ofertas","icone":"🙏","cor":"#F2C552","ordem":4,"tipo":"despesa"},
-  {"id":"g_sonhos","nome":"Sonhos da Família","icone":"✈️","cor":"#E0852F","ordem":5,"tipo":"projeto"}
-  ]
+  {"id":"t_receitas","nome":"Receitas","icone":"wallet","cor":"green","ordem":1},
+  {"id":"t_fixas","nome":"Despesas fixas","icone":"house","cor":"indigo","ordem":2},
+  {"id":"t_variaveis","nome":"Despesas variáveis","icone":"shopping-cart","cor":"magenta","ordem":3},
+  {"id":"t_projetos","nome":"Projetos","icone":"target","cor":"gold","ordem":4}
+  ];
 }
 
-/** Categorias com palavras-chave para sugestão automática. */
+/** Grupos do cardápio (cada um dentro de um tipo; cor da paleta; grupo de análise dos gráficos). */
+function dadosIniciaisGrupos() {
+  return [
+  {"id":"g_dizimo","tipo_id":"t_fixas","nome":"Dízimo e ofertas","cor":"green","grupo_analise":"Dízimo e ofertas","ordem":1,"ativo":true},
+  {"id":"g_moradia","tipo_id":"t_fixas","nome":"Moradia","cor":"indigo","grupo_analise":"Moradia","ordem":2,"ativo":true},
+  {"id":"g_consumo","tipo_id":"t_fixas","nome":"Contas de consumo","cor":"lilac","grupo_analise":"Contas de consumo","ordem":3,"ativo":true},
+  {"id":"g_saude_edu","tipo_id":"t_fixas","nome":"Saúde e educação","cor":"gold","grupo_analise":"Saúde e educação","ordem":4,"ativo":true},
+  {"id":"g_transporte_fixo","tipo_id":"t_fixas","nome":"Transporte","cor":"orange","grupo_analise":"Transporte","ordem":5,"ativo":true},
+  {"id":"g_assinaturas","tipo_id":"t_fixas","nome":"Assinaturas","cor":"rose","grupo_analise":"Lazer","ordem":6,"ativo":true},
+  {"id":"g_alimentacao","tipo_id":"t_variaveis","nome":"Alimentação","cor":"magenta","grupo_analise":"Alimentação","ordem":7,"ativo":true},
+  {"id":"g_transporte_dia","tipo_id":"t_variaveis","nome":"Transporte do dia a dia","cor":"orange","grupo_analise":"Transporte","ordem":8,"ativo":true},
+  {"id":"g_saude_cuidados","tipo_id":"t_variaveis","nome":"Saúde e cuidados","cor":"gold","grupo_analise":"Saúde e educação","ordem":9,"ativo":true},
+  {"id":"g_casa","tipo_id":"t_variaveis","nome":"Casa","cor":"indigo","grupo_analise":"Moradia","ordem":10,"ativo":true},
+  {"id":"g_lazer","tipo_id":"t_variaveis","nome":"Lazer","cor":"rose","grupo_analise":"Lazer","ordem":11,"ativo":true},
+  {"id":"g_outros","tipo_id":"t_variaveis","nome":"Outros","cor":"slate","grupo_analise":"Outros","ordem":12,"ativo":true},
+  {"id":"g_entradas","tipo_id":"t_receitas","nome":"Entradas","cor":"green","grupo_analise":"Receitas","ordem":13,"ativo":true},
+  {"id":"g_projetos","tipo_id":"t_projetos","nome":"Projetos","cor":"gold","grupo_analise":"Projetos","ordem":14,"ativo":true}
+  ];
+}
+
+/** Categorias (cardápio) com ícone Lucide, palavras-chave para classificação automática e orçamento. */
 function dadosIniciaisCategorias() {
   return [
-  {"id":"c_salario","grupo_id":"g_entradas","subgrupo":"Salários","nome":"Salário","icone":"💼","cor":"#4CB963","tipo":"receita","fixa":true,"orcamento_mensal":0,"palavras_chave":"SALARIO;PAGAMENTO;FOLHA;PROVENTOS","sensivel":true,"ativa":true},
-  {"id":"c_aposentadoria","grupo_id":"g_entradas","subgrupo":"Salários","nome":"Aposentadoria","icone":"👴","cor":"#4CB963","tipo":"receita","fixa":true,"orcamento_mensal":0,"palavras_chave":"INSS;APOSENTADORIA;BENEFICIO","sensivel":true,"ativa":true},
-  {"id":"c_renda_extra","grupo_id":"g_entradas","subgrupo":"Outras receitas","nome":"Renda extra","icone":"🛠️","cor":"#6FCF83","tipo":"receita","fixa":false,"orcamento_mensal":0,"palavras_chave":"FREELA;BICO;EXTRA;COMISSAO","ativa":true,"sensivel":false},
-  {"id":"c_aluguel_recebido","grupo_id":"g_entradas","subgrupo":"Outras receitas","nome":"Aluguel recebido","icone":"🏘️","cor":"#6FCF83","tipo":"receita","fixa":true,"orcamento_mensal":0,"palavras_chave":"ALUGUEL RECEBIDO;LOCACAO","ativa":true,"sensivel":false},
-  {"id":"c_mesada_recebida","grupo_id":"g_entradas","subgrupo":"Outras receitas","nome":"Mesada","icone":"🐷","cor":"#6FCF83","tipo":"receita","fixa":true,"orcamento_mensal":0,"palavras_chave":"MESADA","ativa":true,"sensivel":false},
-  {"id":"c_outras_receitas","grupo_id":"g_entradas","subgrupo":"Outras receitas","nome":"Outras entradas","icone":"✨","cor":"#6FCF83","tipo":"receita","fixa":false,"orcamento_mensal":0,"palavras_chave":"RESTITUICAO;PRESENTE;REEMBOLSO;RENDIMENTO","ativa":true,"sensivel":false},
-  {"id":"c_aluguel","grupo_id":"g_casa","subgrupo":"Moradia","nome":"Aluguel / Prestação","icone":"🏠","cor":"#5B5BE0","tipo":"despesa","fixa":true,"orcamento_mensal":2000,"palavras_chave":"ALUGUEL;IMOBILIARIA;FINANCIAMENTO IMOB;CAIXA HABITACAO","ativa":true,"sensivel":false},
-  {"id":"c_iptu","grupo_id":"g_casa","subgrupo":"Moradia","nome":"IPTU","icone":"🏛️","cor":"#5B5BE0","tipo":"despesa","fixa":true,"orcamento_mensal":150,"palavras_chave":"IPTU;PREFEITURA","ativa":true,"sensivel":false},
-  {"id":"c_condominio","grupo_id":"g_casa","subgrupo":"Moradia","nome":"Condomínio","icone":"🏢","cor":"#5B5BE0","tipo":"despesa","fixa":true,"orcamento_mensal":500,"palavras_chave":"CONDOMINIO","ativa":true,"sensivel":false},
-  {"id":"c_agua","grupo_id":"g_casa","subgrupo":"Consumo","nome":"Água","icone":"💧","cor":"#4FA3E0","tipo":"despesa","fixa":true,"orcamento_mensal":120,"palavras_chave":"SANEPAR;SABESP;COPASA;CEDAE;AGUA;SANEAMENTO","ativa":true,"sensivel":false},
-  {"id":"c_luz","grupo_id":"g_casa","subgrupo":"Consumo","nome":"Luz","icone":"💡","cor":"#F2C552","tipo":"despesa","fixa":true,"orcamento_mensal":300,"palavras_chave":"COPEL;ENEL;CEMIG;LIGHT;CPFL;ENERGIA;ELETRICA","ativa":true,"sensivel":false},
-  {"id":"c_gas","grupo_id":"g_casa","subgrupo":"Consumo","nome":"Gás","icone":"🔥","cor":"#E0852F","tipo":"despesa","fixa":true,"orcamento_mensal":120,"palavras_chave":"COMPAGAS;COMGAS;ULTRAGAZ;LIQUIGAS;GAS","ativa":true,"sensivel":false},
-  {"id":"c_internet","grupo_id":"g_casa","subgrupo":"Consumo","nome":"Internet","icone":"🌐","cor":"#5B5BE0","tipo":"despesa","fixa":true,"orcamento_mensal":130,"palavras_chave":"VIVO FIBRA;CLARO NET;OI FIBRA;INTERNET;BANDA LARGA;TIM LIVE","ativa":true,"sensivel":false},
-  {"id":"c_telefone","grupo_id":"g_casa","subgrupo":"Consumo","nome":"Telefone / Celular","icone":"📱","cor":"#5B5BE0","tipo":"despesa","fixa":true,"orcamento_mensal":150,"palavras_chave":"VIVO;CLARO;TIM;OI;CELULAR;TELEFONE","ativa":true,"sensivel":false},
-  {"id":"c_plano_saude","grupo_id":"g_casa","subgrupo":"Saúde e Educação","nome":"Plano de saúde","icone":"🏥","cor":"#E5535B","tipo":"despesa","fixa":true,"orcamento_mensal":900,"palavras_chave":"UNIMED;AMIL;BRADESCO SAUDE;SULAMERICA;HAPVIDA;PLANO DE SAUDE","ativa":true,"sensivel":false},
-  {"id":"c_escola","grupo_id":"g_casa","subgrupo":"Saúde e Educação","nome":"Escola / Faculdade","icone":"🎓","cor":"#5B5BE0","tipo":"despesa","fixa":true,"orcamento_mensal":1200,"palavras_chave":"ESCOLA;COLEGIO;FACULDADE;UNIVERSIDADE;MENSALIDADE;CURSO","ativa":true,"sensivel":false},
-  {"id":"c_financiamento_carro","grupo_id":"g_casa","subgrupo":"Transporte","nome":"Financiamento do carro","icone":"🚗","cor":"#5B5BE0","tipo":"despesa","fixa":true,"orcamento_mensal":900,"palavras_chave":"FINANCIAMENTO VEICULO;CONSORCIO;BV FINANCEIRA;SANTANDER FINANC","ativa":true,"sensivel":false},
-  {"id":"c_seguro_carro","grupo_id":"g_casa","subgrupo":"Transporte","nome":"Seguro do carro","icone":"🛡️","cor":"#5B5BE0","tipo":"despesa","fixa":true,"orcamento_mensal":200,"palavras_chave":"PORTO SEGURO;AZUL SEGUROS;SEGURO AUTO;TOKIO MARINE","ativa":true,"sensivel":false},
-  {"id":"c_ipva","grupo_id":"g_casa","subgrupo":"Transporte","nome":"IPVA / Licenciamento","icone":"📄","cor":"#5B5BE0","tipo":"despesa","fixa":true,"orcamento_mensal":150,"palavras_chave":"IPVA;DETRAN;LICENCIAMENTO","ativa":true,"sensivel":false},
-  {"id":"c_seguros","grupo_id":"g_casa","subgrupo":"Seguros e assinaturas","nome":"Seguros","icone":"☂️","cor":"#5B5BE0","tipo":"despesa","fixa":true,"orcamento_mensal":100,"palavras_chave":"SEGURO VIDA;SEGURO RESIDENCIAL;PREVIDENCIA","ativa":true,"sensivel":false},
-  {"id":"c_assinaturas","grupo_id":"g_casa","subgrupo":"Seguros e assinaturas","nome":"Assinaturas fixas","icone":"🔁","cor":"#5B5BE0","tipo":"despesa","fixa":true,"orcamento_mensal":100,"palavras_chave":"ASSINATURA;ANUIDADE;MENSALIDADE","ativa":true,"sensivel":false},
-  {"id":"c_mercado","grupo_id":"g_diaadia","subgrupo":"Alimentação","nome":"Mercado","icone":"🛒","cor":"#BD55C7","tipo":"despesa","fixa":false,"orcamento_mensal":1500,"palavras_chave":"SUPERMERCADO;MERCADO;CONDOR;MUFFATO;CARREFOUR;ASSAI;ATACADAO;ANGELONI;FESTVAL;BIG;PAO DE ACUCAR;EXTRA","ativa":true,"sensivel":false},
-  {"id":"c_feira","grupo_id":"g_diaadia","subgrupo":"Alimentação","nome":"Feira / Hortifruti","icone":"🥦","cor":"#BD55C7","tipo":"despesa","fixa":false,"orcamento_mensal":250,"palavras_chave":"FEIRA;HORTIFRUTI;SACOLAO;VERDURAS;FRUTAS","ativa":true,"sensivel":false},
-  {"id":"c_padaria","grupo_id":"g_diaadia","subgrupo":"Alimentação","nome":"Padaria","icone":"🥖","cor":"#BD55C7","tipo":"despesa","fixa":false,"orcamento_mensal":200,"palavras_chave":"PADARIA;PANIFICADORA;CONFEITARIA;PAES","ativa":true,"sensivel":false},
-  {"id":"c_delivery","grupo_id":"g_diaadia","subgrupo":"Alimentação","nome":"Delivery / Lanches","icone":"🍕","cor":"#BD55C7","tipo":"despesa","fixa":false,"orcamento_mensal":300,"palavras_chave":"IFOOD;RAPPI;UBER EATS;LANCHE;PIZZA;HAMBURGUER;MC DONALDS;BURGER","ativa":true,"sensivel":false},
-  {"id":"c_farmacia","grupo_id":"g_diaadia","subgrupo":"Farmácia e cuidados","nome":"Farmácia","icone":"💊","cor":"#E5535B","tipo":"despesa","fixa":false,"orcamento_mensal":200,"palavras_chave":"FARMACIA;DROGARIA;DROGASIL;PANVEL;NISSEI;PAGUE MENOS;RAIA;REMEDIO","ativa":true,"sensivel":false},
-  {"id":"c_cuidados","grupo_id":"g_diaadia","subgrupo":"Farmácia e cuidados","nome":"Cuidados pessoais","icone":"💇","cor":"#BD55C7","tipo":"despesa","fixa":false,"orcamento_mensal":150,"palavras_chave":"SALAO;BARBEARIA;CABELEIREIRO;MANICURE;PERFUMARIA;BOTICARIO;NATURA","ativa":true,"sensivel":false},
-  {"id":"c_combustivel","grupo_id":"g_diaadia","subgrupo":"Transporte do dia","nome":"Combustível","icone":"⛽","cor":"#E0852F","tipo":"despesa","fixa":false,"orcamento_mensal":500,"palavras_chave":"POSTO;COMBUSTIVEL;GASOLINA;ETANOL;SHELL;IPIRANGA;PETROBRAS;BR MANIA","ativa":true,"sensivel":false},
-  {"id":"c_transporte","grupo_id":"g_diaadia","subgrupo":"Transporte do dia","nome":"Uber / Ônibus / Estacionamento","icone":"🚌","cor":"#E0852F","tipo":"despesa","fixa":false,"orcamento_mensal":150,"palavras_chave":"UBER;99;ONIBUS;ESTACIONAMENTO;PEDAGIO;URBS;METRO","ativa":true,"sensivel":false},
-  {"id":"c_passeios","grupo_id":"g_diaadia","subgrupo":"Lazer","nome":"Passeios e restaurantes","icone":"🍽️","cor":"#BD55C7","tipo":"despesa","fixa":false,"orcamento_mensal":400,"palavras_chave":"RESTAURANTE;CHURRASCARIA;CINEMA;PARQUE;PASSEIO;SORVETERIA;CAFE","ativa":true,"sensivel":false},
-  {"id":"c_streaming","grupo_id":"g_diaadia","subgrupo":"Lazer","nome":"Streaming e apps","icone":"📺","cor":"#BD55C7","tipo":"despesa","fixa":true,"orcamento_mensal":120,"palavras_chave":"NETFLIX;SPOTIFY;DISNEY;AMAZON PRIME;GLOBOPLAY;HBO;YOUTUBE;APPLE.COM;GOOGLE PLAY","ativa":true,"sensivel":false},
-  {"id":"c_hobbies","grupo_id":"g_diaadia","subgrupo":"Lazer","nome":"Hobbies e esportes","icone":"⚽","cor":"#BD55C7","tipo":"despesa","fixa":false,"orcamento_mensal":150,"palavras_chave":"ACADEMIA;SMARTFIT;LIVRARIA;ESPORTE;JOGO;HOBBY","ativa":true,"sensivel":false},
-  {"id":"c_roupas","grupo_id":"g_diaadia","subgrupo":"Roupas e presentes","nome":"Roupas e calçados","icone":"👕","cor":"#BD55C7","tipo":"despesa","fixa":false,"orcamento_mensal":250,"palavras_chave":"RENNER;C&A;RIACHUELO;ZARA;HERING;CALCADOS;ROUPA;SHEIN;CENTAURO","ativa":true,"sensivel":false},
-  {"id":"c_presentes","grupo_id":"g_diaadia","subgrupo":"Roupas e presentes","nome":"Presentes","icone":"🎁","cor":"#BD55C7","tipo":"despesa","fixa":false,"orcamento_mensal":100,"palavras_chave":"PRESENTE;ANIVERSARIO;FLORICULTURA","ativa":true,"sensivel":false},
-  {"id":"c_casa_manutencao","grupo_id":"g_diaadia","subgrupo":"Imprevistos","nome":"Manutenção da casa","icone":"🔧","cor":"#A9AAB8","tipo":"despesa","fixa":false,"orcamento_mensal":150,"palavras_chave":"LEROY MERLIN;MATERIAL DE CONSTRUCAO;ENCANADOR;ELETRICISTA;CONSERTO;BALAROTI;TELHANORTE","ativa":true,"sensivel":false},
-  {"id":"c_pet","grupo_id":"g_diaadia","subgrupo":"Imprevistos","nome":"Pet","icone":"🐶","cor":"#A9AAB8","tipo":"despesa","fixa":false,"orcamento_mensal":150,"palavras_chave":"PET;PETZ;COBASI;VETERINARIO;RACAO","ativa":true,"sensivel":false},
-  {"id":"c_imprevistos","grupo_id":"g_diaadia","subgrupo":"Imprevistos","nome":"Imprevistos","icone":"⚠️","cor":"#A9AAB8","tipo":"despesa","fixa":false,"orcamento_mensal":200,"palavras_chave":"MULTA;TAXA;JUROS;TARIFA","ativa":true,"sensivel":false},
-  {"id":"c_dizimo","grupo_id":"g_dizimo","subgrupo":"Dízimo e Ofertas","nome":"Dízimo","icone":"🙏","cor":"#F2C552","tipo":"despesa","fixa":true,"orcamento_mensal":0,"palavras_chave":"DIZIMO;IGREJA","ativa":true,"sensivel":false},
-  {"id":"c_ofertas","grupo_id":"g_dizimo","subgrupo":"Dízimo e Ofertas","nome":"Ofertas","icone":"💛","cor":"#F2C552","tipo":"despesa","fixa":false,"orcamento_mensal":0,"palavras_chave":"OFERTA","ativa":true,"sensivel":false},
-  {"id":"c_missoes","grupo_id":"g_dizimo","subgrupo":"Dízimo e Ofertas","nome":"Missões","icone":"🌍","cor":"#F2C552","tipo":"despesa","fixa":false,"orcamento_mensal":0,"palavras_chave":"MISSOES;MISSIONARIO","ativa":true,"sensivel":false},
-  {"id":"c_ajuda","grupo_id":"g_dizimo","subgrupo":"Dízimo e Ofertas","nome":"Ajuda ao próximo","icone":"🤝","cor":"#F2C552","tipo":"despesa","fixa":false,"orcamento_mensal":0,"palavras_chave":"DOACAO;AJUDA;CARIDADE","ativa":true,"sensivel":false},
-  {"id":"c_aporte_sonho","grupo_id":"g_sonhos","subgrupo":"Sonhos da Família","nome":"Aporte em sonho","icone":"✈️","cor":"#E0852F","tipo":"despesa","fixa":false,"orcamento_mensal":0,"palavras_chave":"POUPANCA;APORTE;RESERVA;CDB;TESOURO","ativa":true,"sensivel":false}
-  ]
+  {"id":"c_dizimo","tipo_id":"t_fixas","grupo_id":"g_dizimo","nome":"Dízimo","icone":"church","cor":"green","tipo":"despesa","fixa":true,"orcamento_mensal":1530,"palavras_chave":"DIZIMO;IGREJA","grupo_analise":"Dízimo e ofertas","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_ofertas","tipo_id":"t_fixas","grupo_id":"g_dizimo","nome":"Ofertas","icone":"hand-heart","cor":"green","tipo":"despesa","fixa":false,"orcamento_mensal":100,"palavras_chave":"OFERTA","grupo_analise":"Dízimo e ofertas","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_missoes","tipo_id":"t_fixas","grupo_id":"g_dizimo","nome":"Missões e ajuda","icone":"hand-coins","cor":"green","tipo":"despesa","fixa":false,"orcamento_mensal":80,"palavras_chave":"MISSOES;MISSIONARIO;DOACAO;AJUDA;CARIDADE","grupo_analise":"Dízimo e ofertas","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_aluguel","tipo_id":"t_fixas","grupo_id":"g_moradia","nome":"Aluguel","icone":"key-round","cor":"indigo","tipo":"despesa","fixa":true,"orcamento_mensal":0,"palavras_chave":"ALUGUEL;IMOBILIARIA;LOCACAO","grupo_analise":"Moradia","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_prestacao_casa","tipo_id":"t_fixas","grupo_id":"g_moradia","nome":"Prestação da casa","icone":"house","cor":"indigo","tipo":"despesa","fixa":true,"orcamento_mensal":2450,"palavras_chave":"FINANCIAMENTO IMOB;CAIXA HABITACAO;PRESTACAO;SFH","grupo_analise":"Moradia","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_condominio","tipo_id":"t_fixas","grupo_id":"g_moradia","nome":"Condomínio","icone":"building-2","cor":"indigo","tipo":"despesa","fixa":true,"orcamento_mensal":610,"palavras_chave":"CONDOMINIO","grupo_analise":"Moradia","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_iptu","tipo_id":"t_fixas","grupo_id":"g_moradia","nome":"IPTU","icone":"landmark","cor":"indigo","tipo":"despesa","fixa":true,"orcamento_mensal":140,"palavras_chave":"IPTU;PREFEITURA","grupo_analise":"Moradia","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_luz","tipo_id":"t_fixas","grupo_id":"g_consumo","nome":"Luz","icone":"zap","cor":"lilac","tipo":"despesa","fixa":true,"orcamento_mensal":412,"palavras_chave":"COPEL;ENEL;CEMIG;LIGHT;CPFL;ENERGIA;ELETRICA;ELETROPAULO","grupo_analise":"Contas de consumo","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_agua","tipo_id":"t_fixas","grupo_id":"g_consumo","nome":"Água","icone":"droplet","cor":"lilac","tipo":"despesa","fixa":true,"orcamento_mensal":168,"palavras_chave":"SANEPAR;SABESP;COPASA;CEDAE;AGUA;SANEAMENTO","grupo_analise":"Contas de consumo","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_gas","tipo_id":"t_fixas","grupo_id":"g_consumo","nome":"Gás","icone":"flame","cor":"lilac","tipo":"despesa","fixa":true,"orcamento_mensal":72,"palavras_chave":"COMPAGAS;COMGAS;ULTRAGAZ;LIQUIGAS;GAS","grupo_analise":"Contas de consumo","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_internet","tipo_id":"t_fixas","grupo_id":"g_consumo","nome":"Internet","icone":"wifi","cor":"lilac","tipo":"despesa","fixa":true,"orcamento_mensal":139,"palavras_chave":"VIVO FIBRA;CLARO NET;OI FIBRA;INTERNET;BANDA LARGA;TIM LIVE;FIBRA","grupo_analise":"Contas de consumo","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_telefone","tipo_id":"t_fixas","grupo_id":"g_consumo","nome":"Telefone e celular","icone":"smartphone","cor":"lilac","tipo":"despesa","fixa":true,"orcamento_mensal":189,"palavras_chave":"VIVO;CLARO;TIM;OI;CELULAR;TELEFONE","grupo_analise":"Contas de consumo","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_plano_saude","tipo_id":"t_fixas","grupo_id":"g_saude_edu","nome":"Plano de saúde","icone":"heart-pulse","cor":"gold","tipo":"despesa","fixa":true,"orcamento_mensal":2120,"palavras_chave":"UNIMED;AMIL;BRADESCO SAUDE;SULAMERICA;HAPVIDA;PLANO DE SAUDE","grupo_analise":"Saúde e educação","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_escola","tipo_id":"t_fixas","grupo_id":"g_saude_edu","nome":"Escola e faculdade","icone":"graduation-cap","cor":"gold","tipo":"despesa","fixa":true,"orcamento_mensal":1480,"palavras_chave":"ESCOLA;COLEGIO;FACULDADE;UNIVERSIDADE;MENSALIDADE;PUC;UP;UNICURITIBA","grupo_analise":"Saúde e educação","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_cursos","tipo_id":"t_fixas","grupo_id":"g_saude_edu","nome":"Cursos e livros","icone":"book-open","cor":"gold","tipo":"despesa","fixa":true,"orcamento_mensal":250,"palavras_chave":"CURSO;LIVRARIA;LIVRO;UDEMY;ALURA;KUMON;INGLES","grupo_analise":"Saúde e educação","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_financiamento_carro","tipo_id":"t_fixas","grupo_id":"g_transporte_fixo","nome":"Financiamento do carro","icone":"car","cor":"orange","tipo":"despesa","fixa":true,"orcamento_mensal":0,"palavras_chave":"FINANCIAMENTO VEICULO;CONSORCIO;BV FINANCEIRA;SANTANDER FINANC","grupo_analise":"Transporte","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_seguro_carro","tipo_id":"t_fixas","grupo_id":"g_transporte_fixo","nome":"Seguro do carro","icone":"shield-check","cor":"orange","tipo":"despesa","fixa":true,"orcamento_mensal":310,"palavras_chave":"PORTO SEGURO;AZUL SEGUROS;SEGURO AUTO;TOKIO MARINE;HDI;ALLIANZ","grupo_analise":"Transporte","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_ipva","tipo_id":"t_fixas","grupo_id":"g_transporte_fixo","nome":"IPVA e licenciamento","icone":"landmark","cor":"orange","tipo":"despesa","fixa":true,"orcamento_mensal":150,"palavras_chave":"IPVA;DETRAN;LICENCIAMENTO","grupo_analise":"Transporte","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_vale_transporte","tipo_id":"t_fixas","grupo_id":"g_transporte_fixo","nome":"Vale-transporte","icone":"bus","cor":"orange","tipo":"despesa","fixa":true,"orcamento_mensal":0,"palavras_chave":"VALE TRANSPORTE;CARTAO TRANSPORTE;URBS","grupo_analise":"Transporte","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_streaming","tipo_id":"t_fixas","grupo_id":"g_assinaturas","nome":"Streaming","icone":"tv","cor":"rose","tipo":"despesa","fixa":true,"orcamento_mensal":121,"palavras_chave":"NETFLIX;SPOTIFY;DISNEY;AMAZON PRIME;GLOBOPLAY;HBO;MAX;YOUTUBE PREMIUM;DEEZER;PARAMOUNT","grupo_analise":"Lazer","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_apps","tipo_id":"t_fixas","grupo_id":"g_assinaturas","nome":"Aplicativos","icone":"smartphone","cor":"rose","tipo":"despesa","fixa":true,"orcamento_mensal":60,"palavras_chave":"APPLE.COM;GOOGLE PLAY;ICLOUD;GOOGLE ONE;MICROSOFT;ADOBE;CANVA;CHATGPT;CLAUDE.AI","grupo_analise":"Lazer","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_seguros","tipo_id":"t_fixas","grupo_id":"g_assinaturas","nome":"Seguros diversos","icone":"shield-check","cor":"rose","tipo":"despesa","fixa":true,"orcamento_mensal":100,"palavras_chave":"SEGURO VIDA;SEGURO RESIDENCIAL;PREVIDENCIA;PRUDENTIAL;METLIFE","grupo_analise":"Outros","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_mercado","tipo_id":"t_variaveis","grupo_id":"g_alimentacao","nome":"Supermercado","icone":"shopping-cart","cor":"magenta","tipo":"despesa","fixa":false,"orcamento_mensal":1620,"palavras_chave":"SUPERMERCADO;MERCADO;CONDOR;MUFFATO;CARREFOUR;ASSAI;ATACADAO;ANGELONI;FESTVAL;BIG;PAO DE ACUCAR;EXTRA;SAMS;TAUSTE","grupo_analise":"Alimentação","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_feira","tipo_id":"t_variaveis","grupo_id":"g_alimentacao","nome":"Feira e hortifrúti","icone":"apple","cor":"magenta","tipo":"despesa","fixa":false,"orcamento_mensal":100,"palavras_chave":"FEIRA;HORTIFRUTI;SACOLAO;VERDURAS;FRUTAS;HORTI","grupo_analise":"Alimentação","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_padaria","tipo_id":"t_variaveis","grupo_id":"g_alimentacao","nome":"Padaria","icone":"croissant","cor":"magenta","tipo":"despesa","fixa":false,"orcamento_mensal":214,"palavras_chave":"PADARIA;PANIFICADORA;CONFEITARIA;PAES;PAO","grupo_analise":"Alimentação","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_acougue","tipo_id":"t_variaveis","grupo_id":"g_alimentacao","nome":"Açougue","icone":"beef","cor":"magenta","tipo":"despesa","fixa":false,"orcamento_mensal":180,"palavras_chave":"ACOUGUE;CARNES;FRIGORIFICO;CASA DE CARNES","grupo_analise":"Alimentação","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_delivery","tipo_id":"t_variaveis","grupo_id":"g_alimentacao","nome":"Delivery","icone":"bike","cor":"magenta","tipo":"despesa","fixa":false,"orcamento_mensal":352,"palavras_chave":"IFOOD;RAPPI;UBER EATS;LANCHE;PIZZA;HAMBURGUER;MC DONALDS;BURGER;DELIVERY;AIQFOME","grupo_analise":"Alimentação","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_restaurantes","tipo_id":"t_variaveis","grupo_id":"g_alimentacao","nome":"Restaurantes","icone":"utensils","cor":"magenta","tipo":"despesa","fixa":false,"orcamento_mensal":260,"palavras_chave":"RESTAURANTE;CHURRASCARIA;CAFE;LANCHONETE;BAR;SORVETERIA;OUTBACK;MADERO","grupo_analise":"Alimentação","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_combustivel","tipo_id":"t_variaveis","grupo_id":"g_transporte_dia","nome":"Combustível","icone":"fuel","cor":"orange","tipo":"despesa","fixa":false,"orcamento_mensal":820,"palavras_chave":"POSTO;COMBUSTIVEL;GASOLINA;ETANOL;SHELL;IPIRANGA;PETROBRAS;BR MANIA;AUTO POSTO","grupo_analise":"Transporte","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_estacionamento","tipo_id":"t_variaveis","grupo_id":"g_transporte_dia","nome":"Estacionamento e pedágio","icone":"parking-meter","cor":"orange","tipo":"despesa","fixa":false,"orcamento_mensal":140,"palavras_chave":"ESTACIONAMENTO;PEDAGIO;ESTAPAR;SEM PARAR;CONECTCAR;VELOE;ZONA AZUL;ESTAR","grupo_analise":"Transporte","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_app_transporte","tipo_id":"t_variaveis","grupo_id":"g_transporte_dia","nome":"App de transporte","icone":"car","cor":"orange","tipo":"despesa","fixa":false,"orcamento_mensal":120,"palavras_chave":"UBER;99;CABIFY;99POP;INDRIVE;ONIBUS;METRO","grupo_analise":"Transporte","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_manutencao_carro","tipo_id":"t_variaveis","grupo_id":"g_transporte_dia","nome":"Manutenção do carro","icone":"wrench","cor":"orange","tipo":"despesa","fixa":false,"orcamento_mensal":180,"palavras_chave":"OFICINA;MECANICA;PNEU;AUTO CENTER;LAVA CAR;LAVAGEM;TROCA DE OLEO;BORRACHARIA","grupo_analise":"Transporte","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_farmacia","tipo_id":"t_variaveis","grupo_id":"g_saude_cuidados","nome":"Farmácia","icone":"pill","cor":"gold","tipo":"despesa","fixa":false,"orcamento_mensal":260,"palavras_chave":"FARMACIA;DROGARIA;DROGASIL;PANVEL;NISSEI;PAGUE MENOS;RAIA;REMEDIO;ULTRAFARMA","grupo_analise":"Saúde e educação","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_consultas","tipo_id":"t_variaveis","grupo_id":"g_saude_cuidados","nome":"Consultas e exames","icone":"stethoscope","cor":"gold","tipo":"despesa","fixa":false,"orcamento_mensal":200,"palavras_chave":"CLINICA;LABORATORIO;CONSULTA;EXAME;DENTISTA;ODONTO;HOSPITAL;FISIOTERAPIA;PSICOLOG","grupo_analise":"Saúde e educação","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_cabelo","tipo_id":"t_variaveis","grupo_id":"g_saude_cuidados","nome":"Cabelo e estética","icone":"scissors","cor":"gold","tipo":"despesa","fixa":false,"orcamento_mensal":150,"palavras_chave":"SALAO;BARBEARIA;CABELEIREIRO;MANICURE;ESTETICA;PERFUMARIA;BOTICARIO;NATURA","grupo_analise":"Saúde e educação","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_reparos","tipo_id":"t_variaveis","grupo_id":"g_casa","nome":"Reparos e manutenção","icone":"hammer","cor":"indigo","tipo":"despesa","fixa":false,"orcamento_mensal":150,"palavras_chave":"LEROY MERLIN;MATERIAL DE CONSTRUCAO;ENCANADOR;ELETRICISTA;CONSERTO;BALAROTI;TELHANORTE;CASSOL;FERRAGENS","grupo_analise":"Moradia","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_moveis","tipo_id":"t_variaveis","grupo_id":"g_casa","nome":"Móveis e utensílios","icone":"sofa","cor":"indigo","tipo":"despesa","fixa":false,"orcamento_mensal":100,"palavras_chave":"MOVEIS;TOK STOK;MAGAZINE LUIZA;CASAS BAHIA;HAVAN;UTENSILIOS;ELETRODOMESTICO;AMERICANAS","grupo_analise":"Moradia","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_limpeza","tipo_id":"t_variaveis","grupo_id":"g_casa","nome":"Limpeza","icone":"spray-can","cor":"indigo","tipo":"despesa","fixa":false,"orcamento_mensal":80,"palavras_chave":"LIMPEZA;DIARISTA;LAVANDERIA;PRODUTOS DE LIMPEZA","grupo_analise":"Moradia","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_passeios","tipo_id":"t_variaveis","grupo_id":"g_lazer","nome":"Passeios e eventos","icone":"ticket","cor":"rose","tipo":"despesa","fixa":false,"orcamento_mensal":310,"palavras_chave":"CINEMA;CINEMARK;TEATRO;PARQUE;INGRESSO;SHOW;PASSEIO;ZOOLOGICO;MUSEU;SYMPLA","grupo_analise":"Lazer","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_viagens","tipo_id":"t_variaveis","grupo_id":"g_lazer","nome":"Viagens curtas","icone":"plane","cor":"rose","tipo":"despesa","fixa":false,"orcamento_mensal":280,"palavras_chave":"HOTEL;POUSADA;AIRBNB;BOOKING;PASSAGEM;LATAM;GOL;AZUL;RODOVIARIA","grupo_analise":"Lazer","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_hobbies","tipo_id":"t_variaveis","grupo_id":"g_lazer","nome":"Hobbies","icone":"palette","cor":"rose","tipo":"despesa","fixa":false,"orcamento_mensal":209,"palavras_chave":"ACADEMIA;SMARTFIT;ESPORTE;JOGO;HOBBY;STEAM;PLAYSTATION;XBOX;INSTRUMENTO;ARTESANATO","grupo_analise":"Lazer","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_roupas","tipo_id":"t_variaveis","grupo_id":"g_outros","nome":"Vestuário","icone":"shirt","cor":"slate","tipo":"despesa","fixa":false,"orcamento_mensal":190,"palavras_chave":"RENNER;C&A;RIACHUELO;ZARA;HERING;CALCADOS;ROUPA;SHEIN;CENTAURO;MARISA;NIKE;ADIDAS","grupo_analise":"Outros","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_presentes","tipo_id":"t_variaveis","grupo_id":"g_outros","nome":"Presentes","icone":"gift","cor":"slate","tipo":"despesa","fixa":false,"orcamento_mensal":90,"palavras_chave":"PRESENTE;ANIVERSARIO;FLORICULTURA;FLORES","grupo_analise":"Outros","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_pet","tipo_id":"t_variaveis","grupo_id":"g_outros","nome":"Pets","icone":"paw-print","cor":"slate","tipo":"despesa","fixa":false,"orcamento_mensal":120,"palavras_chave":"PET;PETZ;COBASI;VETERINARIO;RACAO;PETSHOP","grupo_analise":"Outros","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_imprevistos","tipo_id":"t_variaveis","grupo_id":"g_outros","nome":"Imprevistos","icone":"triangle-alert","cor":"slate","tipo":"despesa","fixa":false,"orcamento_mensal":70,"palavras_chave":"MULTA;TAXA;JUROS;TARIFA;CARTORIO;DESPACHANTE","grupo_analise":"Outros","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_salario","tipo_id":"t_receitas","grupo_id":"g_entradas","nome":"Salário","icone":"briefcase","cor":"green","tipo":"receita","fixa":true,"orcamento_mensal":0,"palavras_chave":"SALARIO;PAGAMENTO;FOLHA;PROVENTOS;INSS;APOSENTADORIA","grupo_analise":"Receitas","sensivel":true,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_renda_extra","tipo_id":"t_receitas","grupo_id":"g_entradas","nome":"Renda extra","icone":"banknote","cor":"green","tipo":"receita","fixa":false,"orcamento_mensal":0,"palavras_chave":"FREELA;BICO;EXTRA;COMISSAO;CONSULTORIA;13","grupo_analise":"Receitas","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_aluguel_recebido","tipo_id":"t_receitas","grupo_id":"g_entradas","nome":"Aluguel recebido","icone":"house","cor":"green","tipo":"receita","fixa":true,"orcamento_mensal":0,"palavras_chave":"ALUGUEL RECEBIDO;LOCACAO","grupo_analise":"Receitas","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_rendimentos","tipo_id":"t_receitas","grupo_id":"g_entradas","nome":"Rendimentos","icone":"piggy-bank","cor":"green","tipo":"receita","fixa":false,"orcamento_mensal":0,"palavras_chave":"RENDIMENTO;JUROS RECEBIDOS;DIVIDENDO;CDB;TESOURO","grupo_analise":"Receitas","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_reembolsos","tipo_id":"t_receitas","grupo_id":"g_entradas","nome":"Reembolsos","icone":"circle-dollar-sign","cor":"green","tipo":"receita","fixa":false,"orcamento_mensal":0,"palavras_chave":"REEMBOLSO;RESTITUICAO;ESTORNO","grupo_analise":"Receitas","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_mesada_recebida","tipo_id":"t_receitas","grupo_id":"g_entradas","nome":"Mesada","icone":"hand-coins","cor":"green","tipo":"receita","fixa":true,"orcamento_mensal":0,"palavras_chave":"MESADA","grupo_analise":"Receitas","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_outras_receitas","tipo_id":"t_receitas","grupo_id":"g_entradas","nome":"Outras entradas","icone":"wallet","cor":"green","tipo":"receita","fixa":false,"orcamento_mensal":0,"palavras_chave":"PRESENTE RECEBIDO;VENDA;OUTRA","grupo_analise":"Receitas","sensivel":false,"oculta_cardapio":false,"ativa":true},
+  {"id":"c_aporte_projeto","tipo_id":"t_projetos","grupo_id":"g_projetos","nome":"Aporte em projeto","icone":"target","cor":"gold","tipo":"despesa","fixa":false,"orcamento_mensal":0,"palavras_chave":"POUPANCA;APORTE;RESERVA;APLICACAO","grupo_analise":"Projetos","sensivel":false,"oculta_cardapio":true,"ativa":true}
+  ];
+}
+
+/** Agrupamento fixo usado nos gráficos (nome → cor da paleta). */
+function dadosIniciaisGruposAnalise() {
+  return [
+  {"nome":"Moradia","cor":"indigo"},
+  {"nome":"Contas de consumo","cor":"lilac"},
+  {"nome":"Saúde e educação","cor":"gold"},
+  {"nome":"Transporte","cor":"orange"},
+  {"nome":"Alimentação","cor":"magenta"},
+  {"nome":"Lazer","cor":"rose"},
+  {"nome":"Dízimo e ofertas","cor":"green"},
+  {"nome":"Outros","cor":"slate"}
+  ];
+}
+
+/** Paleta de cores do padrão visual (nome → hexadecimal). */
+function dadosIniciaisCores() {
+  return {"side":"#0D0E23","panel":"#141519","card":"#1E1F26","card2":"#24252E","line":"#2C2E3A","text":"#ECECF2","muted":"#8E90A2","faint":"#5E6072","indigo":"#5B5BE0","sel":"#7776E6","magenta":"#BD55C7","gold":"#F2C552","orange":"#E0852F","green":"#4CB963","red":"#E5535B","lilac":"#9A99F0","rose":"#E58FD9","slate":"#6B6E80"};
 }
 
 /** Versículos sobre mordomia, generosidade, planejamento, família etc. */
@@ -138,5 +188,5 @@ function dadosIniciaisVersiculos() {
   {"id":"v66","referencia":"Deuteronômio 15:10","tema":"generosidade","texto":"Livremente lhe darás, e que o teu coração não seja maligno, quando lhe deres; pois, por esta causa, te abençoará o Senhor, teu Deus, em toda a tua obra e em tudo no que puseres a tua mão."},
   {"id":"v67","referencia":"Salmos 23:1","tema":"provisão","texto":"O Senhor é o meu pastor; nada me faltará."},
   {"id":"v68","referencia":"Provérbios 3:27","tema":"generosidade","texto":"Não detenhas dos seus donos o bem, estando na tua mão poder fazê-lo."}
-  ]
+  ];
 }

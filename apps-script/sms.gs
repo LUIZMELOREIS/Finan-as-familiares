@@ -14,6 +14,9 @@
  *  - listar/resolver caixa de entrada, importar/confirmar fatura, cartões (só 4 últimos dígitos).
  *
  * Segurança: nunca gravamos código de verificação, senha ou número completo de cartão.
+ *
+ * Versão 2: as RegrasLoja (loja → categoria aprendida) têm prioridade sobre as palavras-chave nas
+ * sugestões; resolver_caixa_entrada aprende quando a categoria escolhida difere da sugerida.
  */
 
 // =====================================================================
@@ -250,7 +253,7 @@ function registrarAlertaNaCaixa(texto, canal, usuario) {
   const uid = cartao && cartao.titular_id ? cartao.titular_id : (usuario ? usuario.id : '');
   const compra = { valor: leitura.valor, data: leitura.data, estabelecimento: leitura.estabelecimento };
   const duplicado = compraJaExiste(compra, lancamentosAtivos(), lerAba('CaixaEntrada'), leitura.final_cartao, cartao ? cartao.id : '');
-  const sugestoes = sugerirCategoria(leitura.estabelecimento, lerAba('Categorias'));
+  const sugestoes = aplicarRegraLoja(leitura.estabelecimento, sugerirCategoria(leitura.estabelecimento, lerAba('Categorias')), lerAba('RegrasLoja'));
   const item = {
     id: gerarId('ce'), recebido_em: agoraIso(), canal, texto_bruto: sanitizarTextoSms(texto),
     valor: leitura.valor, estabelecimento: leitura.estabelecimento, final_cartao: leitura.final_cartao || '',
@@ -273,27 +276,34 @@ function itemCaixaPublico(c) {
   return o;
 }
 
-/** listar_caixa_entrada: Júnior só vê os próprios itens. */
+/** listar_caixa_entrada: Dependente só vê os próprios itens. */
 function acaoListarCaixaEntrada(p, ctx) {
   let itens = lerAba('CaixaEntrada');
-  if (ctx.ehJunior) itens = itens.filter((c) => c.usuario_id === ctx.uid);
+  if (ctx.ehDependente) itens = itens.filter((c) => c.usuario_id === ctx.uid);
   if (p.status) itens = itens.filter((c) => c.status === p.status);
   return itens.slice().sort((a, b) => (a.recebido_em < b.recebido_em ? 1 : -1)).map(itemCaixaPublico);
 }
 
-/** resolver_caixa_entrada: 'lancar' cria o lançamento (crédito no cartão do final) ou 'ignorar'. */
+/**
+ * resolver_caixa_entrada: 'lancar' cria o lançamento (crédito no cartão do final) ou 'ignorar'.
+ * Quando a categoria escolhida é diferente da sugerida, a loja é aprendida (RegrasLoja).
+ */
 function acaoResolverCaixaEntrada(p, ctx) {
   const c = buscarPorId('CaixaEntrada', String(p.id || ''));
   if (!c) throw new ErroUsuario('Item não encontrado');
-  if (ctx.ehJunior && c.usuario_id !== ctx.uid) throw new ErroUsuario('Sem permissão');
+  if (ctx.ehDependente && c.usuario_id !== ctx.uid) throw new ErroUsuario('Sem permissão');
   if (c.status === 'lançado') throw new ErroUsuario('Este item já foi lançado.');
   if (p.acao_caixa === 'ignorar') return itemCaixaPublico(atualizarPorId('CaixaEntrada', c.id, { status: 'ignorado' }));
 
   const cartao = lerAba('Cartoes').find((k) => apenasFinalCartao(k.final) === c.final_cartao);
   const categoriaId = p.categoria_id || c.sugestao_categoria || 'c_imprevistos';
-  if (ctx.ehJunior) {
+  if (!buscarPorId('Categorias', categoriaId)) throw new ErroUsuario('Categoria não encontrada.');
+  if (ctx.ehDependente) {
     const cat = buscarPorId('Categorias', categoriaId);
-    if (cat && cat.sensivel && !juniorVeSensivel(ctx)) throw new ErroUsuario('Sem permissão');
+    if (cat && cat.sensivel && !dependenteVeSensivel(ctx)) throw new ErroUsuario('Sem permissão');
+  }
+  if (categoriaId !== c.sugestao_categoria && c.estabelecimento) {
+    try { aprenderLoja(c.estabelecimento, categoriaId, ctx.uid); } catch (e) { console.warn('Não gravei a regra da loja: ' + e.message); }
   }
   const data = c.data_compra || hojeIso();
   const l = inserirLinhas('Lancamentos', [{
@@ -340,10 +350,11 @@ function acaoConfirmarImportacao(p, ctx) {
   const cartao = buscarPorId('Cartoes', String(p.cartao_id || ''));
   if (!cartao) throw new ErroUsuario('Cartão não encontrado');
   const categorias = lerAba('Categorias');
+  const regras = lerAba('RegrasLoja');
   const final = apenasFinalCartao(cartao.final);
   const itens = (p.compras || []).filter((c) => c && lerValor(c.valor) > 0).map((c) => {
     const data = normalizarDataIso(c.data) || hojeIso();
-    const sug = sugerirCategoria(c.estabelecimento || '', categorias);
+    const sug = aplicarRegraLoja(c.estabelecimento || '', sugerirCategoria(c.estabelecimento || '', categorias), regras);
     return {
       id: gerarId('ce'), recebido_em: agoraIso(), canal: 'fatura', texto_bruto: (data + ' ' + (c.estabelecimento || '') + ' ' + lerValor(c.valor) + (c.parcela ? ' ' + c.parcela : '')).slice(0, 300),
       valor: lerValor(c.valor), estabelecimento: String(c.estabelecimento || '').trim(), final_cartao: final, data_compra: data,
@@ -375,7 +386,7 @@ function acaoSalvarCartao(p) {
   const novo = {
     id: k.id || gerarId('k'), apelido: k.apelido, banco: k.banco || '', final, titular_id: k.titular_id || '',
     dia_fechamento: Number(k.dia_fechamento) || 1, dia_vencimento: Number(k.dia_vencimento) || 10,
-    cor: k.cor || '#5B5BE0', ativo: k.ativo === undefined ? true : paraBooleano(k.ativo),
+    cor: k.cor || 'indigo', ativo: k.ativo === undefined ? true : paraBooleano(k.ativo),
   };
   return cartaoPublico(salvarPorId('Cartoes', novo));
 }

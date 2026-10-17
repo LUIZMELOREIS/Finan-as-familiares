@@ -26,7 +26,7 @@ seguem exatamente o que está aqui. Os tipos dos objetos estão em `app/src/tipo
 ```
 
 O servidor valida `token_familia`, depois carrega o usuário pelo `token` e **aplica o perfil**:
-- `Júnior` nunca recebe lançamentos/categorias marcadas como `sensivel` (salários) nem a aba `Usuarios`
+- `Dependente` (chamado `Júnior` na versão 1) nunca recebe lançamentos/categorias marcadas como `sensivel` (salários) nem a aba `Usuarios`
   com tokens; só vê os próprios lançamentos, a mesada e os Projetos.
 - `Adulto` vê tudo, mas não altera Config, Usuarios, Cartoes de outros.
 - `Administrador` tudo.
@@ -39,11 +39,11 @@ Competência é `AAAA-MM`.
 | acao | perfil mínimo | parâmetros | devolve |
 |---|---|---|---|
 | `ping` | — | — | `{ versao, nome_familia }` |
-| `entrar_convite` | — | `codigo_convite`, `apelido`, `avatar`, `cor`, `pin` | `Usuario` com `token` (cria ou ativa o usuário) |
+| `entrar_convite` | — | `codigo_convite`, `nome`, `apelido`, `avatar`, `cor`, `pin` (o perfil vem do convite) | `Usuario` com `token` (cria ou ativa o usuário) |
 | `entrar_pin` | — | `usuario_id`, `pin` | `Usuario` com `token` |
 | `bootstrap` | Júnior | — | `Bootstrap` |
 | `resumo_mes` | Júnior | `competencia` | `ResumoMes` |
-| `listar_lancamentos` | Júnior | `competencia?`, `categoria_id?`, `grupo_id?`, `usuario_id_filtro?`, `status?` | `Lancamento[]` |
+| `listar_lancamentos` | Dependente | `competencia?`, `categoria_id?`, `grupo_id?`, `tipo_id?`, `grupo_analise?`, `usuario_id_filtro?`, `status?` | `Lancamento[]` |
 | `salvar_lancamento` | Júnior | `lancamento: Lancamento` (sem id = novo; `parcelas?: number` distribui) | `Lancamento[]` criados/atualizados |
 | `excluir_lancamento` | Júnior (só os próprios) | `id` | `{ id }` (soft delete) |
 | `desfazer_exclusao` | Júnior | `id` | `Lancamento` |
@@ -78,6 +78,7 @@ Competência é `AAAA-MM`.
 | `votar` | Júnior | `decisao_id`, `voto`, `comentario?` | `Decisao` |
 | `encerrar_decisao` | Administrador | `decisao_id` | `Decisao` (aplica regra de votação) |
 | `pauta_reuniao` | Adulto | `competencia` | `Reuniao` (gera pauta em markdown) |
+| `listar_reunioes` | Adulto | — | `Reuniao[]` (atas salvas) |
 | `salvar_reuniao` | Adulto | `reuniao` | `Reuniao` |
 | `listar_usuarios` | Adulto | — | `Usuario[]` (tokens só para Administrador) |
 | `salvar_usuario` | Administrador | `usuario` | `Usuario` |

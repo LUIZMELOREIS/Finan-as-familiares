@@ -1,5 +1,6 @@
 /**
- * notificacoes.gs — Push, lembrete diário e e-mail de resumo.
+ * notificacoes.gs — Push, lembrete diário, e-mail de resumo e o "canal único" notificarUsuario()
+ * (push → Telegram → e-mail) usado pelas rotinas.
  *
  * IMPORTANTE sobre Web Push: o padrão exige assinar cada envio com VAPID (ES256). O Apps Script
  * NÃO tem assinatura ECDSA (Utilities só assina HMAC/RSA), então o envio nativo não é possível aqui.
@@ -64,7 +65,7 @@ function removerAssinaturasInvalidas(endpoints) {
 
 /** Push para todos os usuários ativos de certos perfis. */
 function enviarPushParaPerfis(perfis, titulo, corpo, url) {
-  const ids = lerAba('Usuarios').filter((u) => u.ativo && perfis.indexOf(u.perfil) >= 0).map((u) => u.id);
+  const ids = lerAba('Usuarios').filter((u) => u.ativo && perfis.indexOf(normalizarPerfil(u.perfil)) >= 0).map((u) => u.id);
   return enviarPush(ids, titulo, corpo, url);
 }
 
@@ -74,10 +75,38 @@ function notificarNovaCompra(item) {
   return enviarPush([item.usuario_id], 'Nova compra no cartão', 'Você gastou ' + moeda(item.valor) + ' em ' + item.estabelecimento + ' — de que é isso?', '#/caixa');
 }
 
-/** lembreteDiario (gatilho diário na hora configurada): push a todos; sem push, e-mail aos administradores. */
+/**
+ * Notifica uma pessoa pelo melhor canal disponível: push (serviço externo) e Telegram (chat vinculado).
+ * Sem nenhum dos dois, cai no e-mail dos administradores quando a pessoa é administradora.
+ * Devolve true se algum canal aceitou.
+ */
+function notificarUsuario(usuarioId, titulo, corpo, url) {
+  let ok = false;
+  try { ok = enviarPush([usuarioId], titulo, corpo, url) || ok; } catch (e) { console.warn('push: ' + e.message); }
+  try { ok = enviarTelegram(usuarioId, '*' + titulo + '*\n' + corpo) || ok; } catch (e) { console.warn('telegram: ' + e.message); }
+  if (!ok) {
+    const u = buscarPorId('Usuarios', usuarioId);
+    if (u && normalizarPerfil(u.perfil) === 'Administrador') ok = enviarEmailAdministradores(titulo, '<p>' + String(corpo).replace(/\n/g, '<br>') + '</p>');
+  }
+  return ok;
+}
+
+/** notificarUsuario() para todos os ativos de certos perfis. Devolve quantos receberam. */
+function notificarPerfis(perfis, titulo, corpo, url) {
+  const ids = lerAba('Usuarios').filter((u) => u.ativo && perfis.indexOf(normalizarPerfil(u.perfil)) >= 0).map((u) => u.id);
+  let n = 0;
+  ids.forEach((id) => { if (notificarUsuario(id, titulo, corpo, url)) n++; });
+  return n;
+}
+
+/**
+ * lembreteDiario: "Você lançou os gastos de hoje?" — push a todos (e Telegram a quem vinculou);
+ * sem push, e-mail aos administradores. Faz parte do vigia diário (rotinas.gs), mas pode rodar sozinho.
+ */
 function lembreteDiario() {
   const cfg = lerConfig();
-  const enviado = enviarPushParaPerfis(['Administrador', 'Adulto', 'Júnior'], cfg.nome_familia || 'Finanças da Família', TEXTO_LEMBRETE, '#/lancar');
+  const enviado = enviarPushParaPerfis(['Administrador', 'Adulto', 'Dependente'], cfg.nome_familia || 'Finanças da Família', TEXTO_LEMBRETE, '#/lancar');
+  try { lerAba('Telegram').filter((r) => r.ativo && r.chat_id).forEach((r) => enviarTelegram(r.usuario_id, TEXTO_LEMBRETE)); } catch (e) { console.warn('telegram: ' + e.message); }
   if (!enviado) {
     enviarEmailAdministradores(TEXTO_LEMBRETE, '<p>' + TEXTO_LEMBRETE + '</p><p>Abra o app e registre os gastos do dia. ' +
       (propriedade('URL_APP', '') ? '<a href="' + propriedade('URL_APP') + '">Abrir o app</a>' : '') + '</p>' +

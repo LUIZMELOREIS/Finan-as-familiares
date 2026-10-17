@@ -13,6 +13,9 @@
  *  4. NFC-e: busca a página do QR na SEFAZ e extrai total/emitente/CNPJ/data por regex.
  *
  * Os arquivos são salvos no Drive na subpasta do tipo, em AAAA/MM, e o link vai em anexo_url.
+ *
+ * Versão 2: os prompts recebem o cardápio (categorias ativas com ícone e grupo) e pedem o
+ * `categoria_id`; depois da leitura as RegrasLoja (loja → categoria aprendida) têm prioridade.
  */
 
 const URL_API_CLAUDE = 'https://api.anthropic.com/v1/messages';
@@ -28,18 +31,13 @@ function claudeDisponivel() {
 }
 
 /**
- * Chama o endpoint Messages com blocos de conteúdo (imagem/documento/texto) e devolve o texto.
- * Lança erro se não houver chave ou se a API falhar (quem chama decide o fallback).
+ * Requisição bruta ao endpoint Messages (usada pela leitura e pelo assistente com tool use).
+ * Recebe o corpo completo ({model, max_tokens, system, messages, tools?}) e devolve o JSON da resposta.
+ * Lança erro se não houver chave, se a API falhar ou se o modelo recusar.
  */
-function chamarClaude(blocos, maxTokens, sistema) {
+function requisicaoClaude(corpo) {
   const chave = propriedade('CHAVE_API_CLAUDE', '');
   if (!chave) throw new Error('CHAVE_API_CLAUDE não configurada');
-  const corpo = {
-    model: propriedade('MODELO_CLAUDE', MODELO_CLAUDE_PADRAO),
-    max_tokens: maxTokens || 2048,
-    system: sistema || 'Você é um assistente que lê documentos financeiros brasileiros e responde SOMENTE com JSON válido, sem comentários, sem markdown.',
-    messages: [{ role: 'user', content: blocos }],
-  };
   const resposta = UrlFetchApp.fetch(URL_API_CLAUDE, {
     method: 'post',
     contentType: 'application/json',
@@ -51,8 +49,28 @@ function chamarClaude(blocos, maxTokens, sistema) {
   const texto = resposta.getContentText();
   if (codigo !== 200) throw new Error('Claude respondeu ' + codigo + ': ' + texto.slice(0, 300));
   const json = JSON.parse(texto);
-  if (json.stop_reason === 'refusal') throw new Error('Claude recusou a leitura deste documento');
+  if (json.stop_reason === 'refusal') throw new Error('Claude recusou este conteúdo');
+  return json;
+}
+
+/**
+ * Chama o endpoint Messages com blocos de conteúdo (imagem/documento/texto) e devolve o texto.
+ * Lança erro se não houver chave ou se a API falhar (quem chama decide o fallback).
+ */
+function chamarClaude(blocos, maxTokens, sistema) {
+  const json = requisicaoClaude({
+    model: propriedade('MODELO_CLAUDE', MODELO_CLAUDE_PADRAO),
+    max_tokens: maxTokens || 2048,
+    system: sistema || 'Você é um assistente que lê documentos financeiros brasileiros e responde SOMENTE com JSON válido, sem comentários, sem markdown.',
+    messages: [{ role: 'user', content: blocos }],
+  });
   return (json.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n');
+}
+
+/** Lista do cardápio para o prompt: "c_mercado: Supermercado (Alimentação, shopping-cart)". */
+function cardapioParaPrompt(categorias, grupos) {
+  const grpMap = indexarPorId(grupos || []);
+  return (categorias || []).filter((c) => c.ativa !== false && !c.oculta_cardapio).map((c) => '- ' + c.id + ': ' + c.nome + ' (' + ((grpMap[c.grupo_id] || {}).nome || c.grupo_analise || '') + (c.icone ? ', ' + c.icone : '') + ')').join('\n');
 }
 
 /** Bloco de conteúdo para imagem ou PDF em base64. */
@@ -72,8 +90,8 @@ function extrairJson(texto) {
   throw new Error('Resposta do Claude não é JSON');
 }
 
-/** Prompt em português conforme o tipo do documento. */
-function promptLeitura(tipo, contasFixas) {
+/** Prompt em português conforme o tipo do documento. `cardapio` = texto de cardapioParaPrompt(). */
+function promptLeitura(tipo, contasFixas, cardapio) {
   const hoje = hojeIso();
   if (tipo === 'conta') {
     const lista = (contasFixas || []).map((c) => '- ' + c.id + ': ' + c.nome).join('\n');
@@ -92,7 +110,8 @@ function promptLeitura(tipo, contasFixas) {
   return 'Leia este cupom fiscal ou recibo brasileiro e responda SOMENTE com JSON:\n' +
     '{"valor": number (total pago), "data": "AAAA-MM-DD", "estabelecimento": string (nome fantasia), "cnpj": string ou "",\n' +
     '"forma_pgto": "dinheiro"|"pix"|"débito"|"crédito"|"boleto"|null, "itens": [{"nome": string, "valor": number}] (até 20 itens, ou []),\n' +
-    '"descricao": string curta (ex.: "Compras no mercado"), "confianca": number 0..1}\n' +
+    '"descricao": string curta (ex.: "Compras no mercado"), "categoria_id": string (um id do cardápio abaixo, o que melhor descreve a compra) ou null, "confianca": number 0..1}\n' +
+    'Cardápio de despesas (id: nome (grupo, ícone)):\n' + (cardapio || '- (nenhum)') + '\n' +
     'Hoje é ' + hoje + '. Use ponto como separador decimal. Não invente valores: se não souber, use null.';
 }
 
@@ -186,11 +205,17 @@ function completarLeituraConta(leitura, textoExtra) {
   return leitura;
 }
 
-/** Completa a leitura de um cupom com a categoria sugerida. */
+/**
+ * Completa a leitura de um cupom com a categoria: 1º a regra de loja aprendida, 2º a que o Claude
+ * escolheu no cardápio, 3º as palavras-chave.
+ */
 function completarLeituraCupom(leitura, ctx) {
+  const categorias = categoriasVisiveis(ctx);
   const texto = [leitura.estabelecimento, leitura.descricao].concat((leitura.itens || []).map((i) => i.nome)).filter(Boolean).join(' ');
-  const sug = sugerirCategoria(texto, categoriasVisiveis(ctx));
-  if (!leitura.categoria_id) leitura.categoria_id = sug[0];
+  const sug = sugerirCategoria(texto, categorias);
+  const regra = leitura.estabelecimento ? regraDaLoja(leitura.estabelecimento, lerAba('RegrasLoja')) : null;
+  if (regra && categorias.some((c) => c.id === regra.categoria_id)) leitura.categoria_id = regra.categoria_id;
+  else if (!leitura.categoria_id || !categorias.some((c) => c.id === leitura.categoria_id)) leitura.categoria_id = sug[0];
   return leitura;
 }
 
@@ -229,7 +254,8 @@ function lerDocumento(base64, mime, tipo, blob, ctx) {
   let leitura = null;
   if (claudeDisponivel()) {
     try {
-      const resposta = chamarClaude([blocoArquivo(base64, mime), { type: 'text', text: promptLeitura(tipo, contasFixas) }], tipo === 'fatura_cartao' ? 4096 : 1500);
+      const cardapio = tipo === 'cupom' ? cardapioParaPrompt(categoriasVisiveis(ctx || { ehDependente: false, config: lerConfig() }), lerAba('Grupos')) : '';
+      const resposta = chamarClaude([blocoArquivo(base64, mime), { type: 'text', text: promptLeitura(tipo, contasFixas, cardapio) }], tipo === 'fatura_cartao' ? 4096 : 1500);
       leitura = normalizarLeituraClaude(extrairJson(resposta), tipo);
       leitura.origem_leitura = 'claude';
     } catch (e) {
@@ -267,6 +293,7 @@ function normalizarLeituraClaude(j, tipo) {
   } else {
     r.valor = num(j.valor); r.data = j.data ? normalizarDataIso(j.data) : undefined; r.estabelecimento = str(j.estabelecimento); r.cnpj = str(j.cnpj);
     r.forma_pgto = FORMAS_PGTO.indexOf(j.forma_pgto) >= 0 ? j.forma_pgto : undefined; r.descricao = str(j.descricao);
+    r.categoria_id = str(j.categoria_id);
     r.itens = (j.itens || []).map((i) => ({ nome: String(i.nome || ''), valor: num(i.valor) || 0 })).slice(0, 30);
   }
   r.confianca = Math.max(0, Math.min(1, Number(j.confianca) || 0.8));
@@ -317,23 +344,31 @@ function lerArquivoFatura(base64Bruto, mime, nomeOriginal, ctx) {
 function lerBlobComoConta(blob) {
   const base64 = Utilities.base64Encode(blob.getBytes());
   const mime = blob.getContentType() || 'application/pdf';
-  return lerDocumento(base64, mime, 'conta', blob, { ehJunior: false, config: lerConfig() });
+  return lerDocumento(base64, mime, 'conta', blob, { ehDependente: false, ehJunior: false, config: lerConfig() });
 }
 
 // ---------- Texto (voz / SMS) ----------
 
-/** ler_texto: regex local; se a confiança for baixa e houver chave, pede ajuda ao Claude. */
+/** Aplica a regra de loja aprendida a uma leitura (a categoria aprendida vence). */
+function aplicarRegraLojaNaLeitura(leitura, categorias) {
+  const est = leitura.estabelecimento || leitura.descricao;
+  const regra = est ? regraDaLoja(est, lerAba('RegrasLoja')) : null;
+  if (regra && (categorias || []).some((c) => c.id === regra.categoria_id)) { leitura.categoria_id = regra.categoria_id; leitura.confianca = Math.max(Number(leitura.confianca) || 0, 0.85); }
+  return leitura;
+}
+
+/** ler_texto: regex local → RegrasLoja; se a confiança for baixa e houver chave, pede ajuda ao Claude. */
 function acaoLerTexto(p, ctx) {
   const texto = String(p.texto || '').trim();
   if (!texto) throw new ErroUsuario('Nenhum texto recebido.');
   const categorias = categoriasVisiveis(ctx);
-  const local = extrairDeTexto(texto, categorias);
+  const local = aplicarRegraLojaNaLeitura(extrairDeTexto(texto, categorias), categorias);
   if (local.confianca >= 0.7 || !claudeDisponivel()) return local;
   try {
-    const lista = categorias.map((c) => c.id + ' (' + c.nome + ')').join(', ');
     const prompt = 'Frase dita por um membro da família sobre um gasto ou receita: "' + texto.replace(/"/g, "'") + '".\n' +
       'Responda SOMENTE com JSON: {"valor": number ou null, "data": "AAAA-MM-DD" ou null, "descricao": string, "estabelecimento": string ou null,\n' +
-      '"forma_pgto": "dinheiro"|"pix"|"débito"|"crédito"|"boleto"|null, "categoria_id": um destes ids: ' + lista + ', "confianca": 0..1}.\n' +
+      '"forma_pgto": "dinheiro"|"pix"|"débito"|"crédito"|"boleto"|null, "categoria_id": um id do cardápio abaixo, "confianca": 0..1}.\n' +
+      'Cardápio (id: nome (grupo, ícone)):\n' + cardapioParaPrompt(categorias, lerAba('Grupos')) + '\n' +
       'Hoje é ' + hojeIso() + '. Se a data não for dita, use hoje.';
     const j = extrairJson(chamarClaude([{ type: 'text', text: prompt }], 400));
     const r = semUndefined({
@@ -346,7 +381,7 @@ function acaoLerTexto(p, ctx) {
       confianca: Math.max(local.confianca, Math.min(1, Number(j.confianca) || 0.6)),
       origem_leitura: 'claude',
     });
-    return r;
+    return aplicarRegraLojaNaLeitura(r, categorias);
   } catch (e) {
     console.warn('ler_texto: Claude falhou, devolvendo leitura local: ' + e.message);
     return local;
@@ -368,7 +403,8 @@ function acaoConsultarNfce(p, ctx) {
   if (!dados.valor) {
     return { confianca: 0, origem_leitura: 'nfce', aviso: 'A SEFAZ não devolveu os dados do cupom (pode exigir captcha). Tire uma foto do cupom ou digite o valor.' };
   }
-  const sug = sugerirCategoria(dados.estabelecimento || '', categoriasVisiveis(ctx));
+  const categorias = categoriasVisiveis(ctx);
+  const sug = aplicarRegraLoja(dados.estabelecimento || '', sugerirCategoria(dados.estabelecimento || '', categorias), lerAba('RegrasLoja'));
   return Object.assign(dados, { categoria_id: sug[0], confianca: 0.95, origem_leitura: 'nfce' });
 }
 
