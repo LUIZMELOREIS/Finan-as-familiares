@@ -2,16 +2,19 @@
 
 > *"Eu e a minha casa serviremos ao Senhor."* — Josué 24:15
 
-Um **app de celular da família** para controlar as finanças da casa — instalável pela tela inicial do iPhone e do Android, **sem loja de aplicativos**. Cada integrante lança os gastos em segundos (**foto do cupom, voz ou digitação**), as contas da casa (luz, água, internet…) são **lidas automaticamente**, os gastos de cartão que alguém esqueceu são **capturados pelos SMS/alertas do banco**, e a família **decide junto** onde alocar o dinheiro e acompanha a poupança de cada **sonho** (viagem, carro, reserva).
+App de **controle financeiro da família**, de uso diário pelo celular (instalável na tela inicial, **sem loja de aplicativos**) e com **painel completo no computador**. Cada membro lança as despesas em segundos (**foto do cupom, fatura, digitação ou voz**) escolhendo num **cardápio pronto**; as contas da casa são **lidas de PDFs e e-mails**; os gastos de cartão esquecidos são **capturados pelos SMS e alertas do banco**; um **assistente financeiro** responde perguntas, vigia gastos fora do padrão e prepara o fechamento do mês; e a família **decide junto** e acompanha a poupança de cada **projeto** (viagem, carro, reserva).
+
+> **Versão 2 (17/10/2026):** o visual segue um contrato obrigatório — `docs/referencia/referencia_visual.html`. Tom sério, sem emojis; ícones de linha Lucide; 4 cards de tipo (Receitas · Despesas fixas · Despesas variáveis · Projetos). Veja o `PLANO.md`.
 
 Os dados ficam **no seu Google Drive**, numa planilha que você pode abrir a qualquer hora. A base é a **mordomia cristã**: Deus é o dono, nós administramos.
 
 | | |
 |---|---|
-| 📱 App | PWA (React + Vite + TypeScript + Tailwind) — pasta [`app/`](app) |
+| 📱 App | PWA (React + Vite + TypeScript + Tailwind + lucide-react) — pasta [`app/`](app) |
 | ⚙️ API | Google Apps Script publicado como App da Web — pasta [`apps-script/`](apps-script) |
 | 🗄️ Banco | Google Planilha `BD_Financas_Familia` dentro de uma pasta no seu Drive |
-| 🧠 Leitura inteligente | API do Claude (cupons, faturas, SMS); fallback: OCR do Drive + regras |
+| 🧠 IA | API do Claude: leitura de cupons/faturas/SMS e **Assistente** com tool use; fallback: OCR do Drive + regras locais |
+| 🤖 Telegram | Bot gratuito da família para lançar por mensagem/foto e receber avisos (opcional) |
 | 📄 Documentos | [`PLANO.md`](PLANO.md) · [`GUIA_DA_FAMILIA.md`](GUIA_DA_FAMILIA.md) · [`GUIA_CAPTURA_SMS.md`](GUIA_CAPTURA_SMS.md) · [`docs/API.md`](docs/API.md) |
 
 ---
@@ -24,7 +27,7 @@ npm install
 npm run dev
 ```
 
-Abra o endereço que aparecer (ex.: `http://localhost:5173`) e toque em **"Experimentar com dados de exemplo"**. É o **modo demonstração**: 12 meses de lançamentos fictícios, 4 pessoas, 2 cartões, 4 sonhos. Tudo funciona, só não grava no Drive.
+Abra o endereço que aparecer (ex.: `http://localhost:5173`) e toque em **"Experimentar com dados de exemplo"**. É o **modo demonstração**: 12 meses de lançamentos fictícios da Família Reis (Luiz, Nina e dois dependentes), 2 cartões, 4 projetos, assistente por regras locais. Tudo funciona, só não grava no Drive.
 
 Para ver em tamanho de celular no computador: pressione `F12` → ícone de celular → escolha "iPhone 14" (390×844).
 
@@ -49,6 +52,7 @@ Você vai precisar apenas de uma **conta Google** (Gmail). Não precisa de cart�
      | `SOBRENOME` | o sobrenome da família (ex.: `Melo Reis`) |
      | `CHAVE_API_CLAUDE` | sua chave da API do Claude (começa com `sk-ant-…`; crie em [console.anthropic.com](https://console.anthropic.com)). **Opcional**: sem ela, a leitura de cupons usa o OCR do Google (menos preciso). |
      | `URL_APP` | o endereço onde o app vai ficar (Parte 3). Pode preencher depois. |
+     | `TOKEN_TELEGRAM` | **Opcional.** Token do bot criado no @BotFather, para lançar e receber avisos pelo Telegram (Parte 7). |
 5. Ative o serviço **Drive** (para o OCR de reserva): barra lateral → **"Serviços" +** → escolha **"Drive API"** → **Adicionar**.
 6. Volte ao editor, abra o arquivo **`setup`**, escolha a função **`instalar`** na lista ao lado de "Depurar" e clique em **▶ Executar**.
 7. O Google vai pedir **autorização**: clique em "Revisar permissões" → escolha sua conta → "Avançado" → "Acessar Finanças da Família (não seguro)" → "Permitir". (É "não seguro" só porque o app é seu, não foi publicado na loja do Google.)
@@ -85,11 +89,11 @@ Você vai precisar apenas de uma **conta Google** (Gmail). Não precisa de cart�
 
 ### Parte 4 — Instalar no celular de cada um
 
-1. O administrador abre o app, faz login (escolhe o avatar "Administrador", PIN `1234`) e vai em **Mais → Configurações → Membros → Convidar**. Escolha o perfil (Administrador / Adulto / Júnior) e **envie o link ou mostre o QR Code**.
+1. O administrador abre o app, faz login (perfil "Administrador", PIN `1234`) e vai em **Configurações → Membros → Convidar**. Escolha o perfil (Administrador / Adulto / Dependente) e **envie o link ou mostre o QR Code**.
 2. A pessoa abre o link **no navegador do celular** (Safari no iPhone, Chrome no Android) e segue as instruções na tela:
    - **iPhone (Safari)**: toque no botão **Compartilhar** (quadrado com seta ⬆️, embaixo) → role e toque em **"Adicionar à Tela de Início"** → **Adicionar**.
    - **Android (Chrome)**: toque no menu **⋮** (canto superior direito) → **"Instalar app"** ou **"Adicionar à tela inicial"** → **Instalar**.
-3. Abra o app pelo ícone novo na tela inicial, escolha o **avatar**, o **apelido** e crie um **PIN de 4 dígitos**. Pronto — o celular fica lembrado.
+3. Abra o app pelo ícone novo na tela inicial, informe **nome**, **apelido**, foto (opcional) e crie um **PIN de 4 dígitos**. Pronto — o celular fica lembrado; a **capa** com a foto da família e o brasão é a tela de bloqueio.
 
 ### Parte 5 — Contas por e-mail (opcional, mas vale muito a pena)
 
@@ -106,7 +110,13 @@ Também existe a pasta **`Contas da Casa/_Entrada`** no Drive: qualquer PDF que 
 
 ### Parte 6 — Captura dos SMS do cartão
 
-Veja o [**GUIA_CAPTURA_SMS.md**](GUIA_CAPTURA_SMS.md) (iPhone com o app Atalhos, Android com o MacroDroid). O próprio app tem a tela **Mais → Captura automática** com a URL e o seu token já preenchidos.
+Veja o [**GUIA_CAPTURA_SMS.md**](GUIA_CAPTURA_SMS.md) (iPhone com o app Atalhos, Android com o MacroDroid). O próprio app tem a tela **Configurações → Captura automática** com a URL e o seu token já preenchidos.
+
+### Parte 7 — Assistente e bot do Telegram (opcional)
+
+- O **Assistente** (aba do app) responde perguntas como "Quanto gastamos com delivery este mês?", "Quais assinaturas temos?", "Dá para fechar a viagem de julho?" e lança despesas por texto ("gastei 45 na padaria no pix"). Com a `CHAVE_API_CLAUDE` configurada, a conversa é livre; sem ela, responde às perguntas mais comuns por regras.
+- **Rotinas automáticas** (ligue/desligue em Configurações → Rotinas e alertas): **vigia diário** às 20h (gasto fora do padrão, cobrança duplicada, assinatura nova, conta a vencer, gastos sem categoria), **análise quinzenal** (dias 1 e 16) e **fechamento do mês** (dia 1º: relatório, projeção de 3 meses e pauta da reunião, por e-mail aos administradores).
+- **Telegram:** no app Telegram, fale com **@BotFather** → `/newbot` → copie o token → cole em `TOKEN_TELEGRAM` nas Propriedades do script → rode `configurarTelegram()` no Apps Script. Cada membro vincula o próprio chat em **Configurações → Rotinas e alertas → Vincular meu Telegram** (envia `/start CÓDIGO` ao bot). Depois é só mandar "gastei 30 na padaria" ou a foto do cupom.
 
 ---
 
@@ -117,6 +127,7 @@ app/                 PWA (React). `npm run dev`, `npm test`, `npm run build`, `n
 apps-script/         Back-end Google Apps Script (.gs) + README de publicação + testes das funções puras
 dados/               Dados iniciais: grupos/categorias e versículos (fonte única para app e Apps Script)
 docs/API.md          Contrato da API
+docs/referencia/     Contrato visual (HTML de referência, prompt v2, renders 1440/390)
 PLANO.md             Fases, decisões técnicas, pendências e ideias para depois
 GUIA_DA_FAMILIA.md   Manual de 1 página para os integrantes
 GUIA_CAPTURA_SMS.md  Passo a passo iPhone/Android para captura de SMS
@@ -125,7 +136,7 @@ GUIA_CAPTURA_SMS.md  Passo a passo iPhone/Android para captura de SMS
 ## Segurança e privacidade
 
 - A **chave do Claude** fica só nas Propriedades do script (nunca no app nem no Git).
-- Toda chamada exige o **token da família + token do usuário**; o perfil é validado **no servidor** (um Júnior não lê salários nem chamando a API direto).
+- Toda chamada exige o **token da família + token do usuário**; o perfil é validado **no servidor** (um Dependente não lê salários nem chamando a API direto).
 - **Nunca** guardamos número completo de cartão, CVV, senha ou códigos recebidos por SMS. Os SMS que não são de compra (códigos, propaganda) são descartados.
 - Tudo é **soft delete**: nada some de verdade da planilha. Há **log de auditoria** (aba `Log`) e **backup semanal** automático em `Backups/`.
 

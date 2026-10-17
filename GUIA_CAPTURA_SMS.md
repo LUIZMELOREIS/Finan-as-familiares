@@ -6,7 +6,7 @@
 
 Nenhum app web (e nenhum app da App Store no iPhone) pode ler os SMS do celular sozinho — a Apple não permite, e no Android o Google restringe essa permissão. Por isso a captura é feita por uma **automação do próprio celular**, que **encaminha o SMS para a API da família** assim que ele chega. É seguro: só vai o texto da mensagem de compra, com o **seu token pessoal** (que você pode revogar a qualquer momento).
 
-Dentro do app, a tela **Mais → Captura automática** mostra **a URL e o seu token já preenchidos** e tem botões "Copiar" para cada passo. Este guia é a versão impressa.
+Dentro do app, a tela **Configurações → Captura automática** mostra **a URL e o seu token já preenchidos** e tem botões "Copiar" para cada passo. Este guia é a versão impressa.
 
 Você vai precisar de dois dados (estão na tela "Captura automática"):
 
@@ -97,8 +97,13 @@ Mesmo que algum SMS se perca, nada escapa: quando a fatura fechar, vá em **Caix
 ## 🔒 Segurança
 
 - O **token é pessoal** e identifica quem comprou; o app também confere o **final do cartão** com o cadastro. Para revogar: Configurações → Membros → **Gerar novo token** (o antigo para de funcionar na hora).
+- Os gastos capturados caem na **Caixa de entrada** com a pergunta "R$ X · Loja — qual é a despesa?" e os chips do cardápio com a sugestão marcada. Quando você corrige a sugestão, o app **aprende**: aquela loja passa a cair sempre na despesa escolhida.
 - Mensagens que **não são de compra** (códigos de verificação, propaganda, estornos) são **descartadas** e **nunca guardadas**.
 - Nunca guardamos número completo de cartão, CVV, senha ou códigos de segurança.
+
+## Telegram (alternativa a tudo isso)
+
+Se a família usar o bot do Telegram (README, Parte 7), basta **encaminhar a mensagem do banco** para o bot, ou mandar "gastei 30 na padaria", ou a foto do cupom. O bot responde com a despesa sugerida e botões para confirmar.
 
 ## Bancos reconhecidos automaticamente
 
