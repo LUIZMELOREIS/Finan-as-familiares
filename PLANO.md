@@ -81,6 +81,17 @@
 12. **Imagens de capa/brasão** ficam no Drive em `Identidade da Família/` com link público de visualização (só a imagem); o SVG do brasão também é salvo.
 13. **Hospedagem padrão: GitHub Pages** (workflow pronto). Para subdomínio próprio, basta apontar um CNAME.
 
+## Simplificações conhecidas (registradas na integração)
+
+- **Push nativo**: o Apps Script não assina Web Push (VAPID/ES256). O envio usa um serviço externo opcional (`URL_SERVICO_PUSH`); sem ele, os lembretes e avisos de vencimento vão por **e-mail** aos administradores.
+- **Ícones 192/512 do brasão**: o Apps Script não rasteriza SVG; `salvar_brasao_svg` devolve o próprio SVG nas três URLs. Os PNGs do manifest são gerados no build (`npm run icones`) a partir de `app/public/brasao.svg` — para usar o brasão criado no app como ícone, baixe o SVG na tela Brasão, substitua esse arquivo e republique.
+- **QR Code do convite** usa um serviço público de imagem (`api.qrserver.com`); sem internet a tela mostra o link para copiar.
+- **Arquivo .macro do MacroDroid** é ilustrativo; a tela orienta a criar a macro à mão se a importação falhar.
+- **Histórico de reuniões** fica no aparelho (não há ação `listar_reunioes` no contrato); a ata de cada mês é salva na planilha.
+- **Caixa de Entrada** não tem "desfazer" ao lançar (o lançamento criado pode ser apagado na lista do grupo).
+- **Modo demonstração** não filtra o resumo do mês por membro para o Júnior (a API real faz).
+- **Paleta obrigatória** índigo × magenta tem pouca separação para daltonismo protan; mitigado com legendas sempre com nome + valor, rótulos diretos e as duas cores nunca vizinhas nos donuts.
+
 ## Como testar visualmente
 ```bash
 cd app && npm install && npm run dev        # abre em modo demonstração
