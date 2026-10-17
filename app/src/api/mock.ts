@@ -39,7 +39,7 @@ interface Banco {
   log: Array<{ data: string; usuario_id: string; acao: string; detalhe: string }>
 }
 
-const CHAVE = 'ff_mock_banco_v2'
+const CHAVE = 'ff_mock_banco_v2b'
 let cache: Banco | null = null
 
 // ---------- Gerador de dados de exemplo (12 meses) ----------
@@ -204,14 +204,14 @@ export function gerarBancoExemplo(): Banco {
 
     // Aportes
     add({ data: dia(6), tipo: 'despesa', valor: 800, categoria_id: 'c_aporte_projeto', descricao: 'Aporte: Viagem de julho', estabelecimento: 'Poupança', forma_pgto: 'pix', usuario_id: 'u_luiz', origem: 'manual', projeto_id: 'p_viagem' })
-    add({ data: dia(6), tipo: 'despesa', valor: 600, categoria_id: 'c_aporte_projeto', descricao: 'Aporte: Reserva de emergência', estabelecimento: 'CDB', forma_pgto: 'pix', usuario_id: 'u_nina', origem: 'manual', projeto_id: 'p_reserva' })
+    add({ data: dia(6), tipo: 'despesa', valor: 1000, categoria_id: 'c_aporte_projeto', descricao: 'Aporte: Reserva de emergência', estabelecimento: 'CDB', forma_pgto: 'pix', usuario_id: 'u_nina', origem: 'manual', projeto_id: 'p_reserva' })
 
     for (const c of categorias) if (c.orcamento_mensal) orcamento.push({ competencia: comp, categoria_id: c.id, valor_planejado: c.orcamento_mensal })
   }
 
   const projetos: Projeto[] = [
-    { id: 'p_viagem', nome: 'Viagem de julho', icone: 'plane', foto_url: '', meta_valor: 18000, data_alvo: `${new Date().getFullYear() + 1}-06-30`, valor_inicial: 240, prioridade: 1, status: 'ativo', versiculo: 'Lucas 14:28', criado_por: 'u_nina', criado_em: somarMeses(compAtual, -11) + '-10' },
-    { id: 'p_reserva', nome: 'Reserva de emergência', icone: 'shield-check', foto_url: '', meta_valor: 60000, data_alvo: `${new Date().getFullYear() + 1}-12-31`, valor_inicial: 4000, prioridade: 2, status: 'ativo', versiculo: 'Provérbios 6:6-8', criado_por: 'u_luiz', criado_em: somarMeses(compAtual, -11) + '-10' },
+    { id: 'p_viagem', nome: 'Viagem de julho', icone: 'plane', foto_url: '', meta_valor: 18000, data_alvo: `${new Date().getFullYear() + 1}-06-30`, valor_inicial: 2400, prioridade: 1, status: 'ativo', versiculo: 'Lucas 14:28', criado_por: 'u_nina', criado_em: somarMeses(compAtual, -11) + '-10' },
+    { id: 'p_reserva', nome: 'Reserva de emergência', icone: 'shield-check', foto_url: '', meta_valor: 60000, data_alvo: `${new Date().getFullYear() + 2}-12-31`, valor_inicial: 4000, prioridade: 2, status: 'ativo', versiculo: 'Provérbios 6:6-8', criado_por: 'u_luiz', criado_em: somarMeses(compAtual, -11) + '-10' },
     { id: 'p_carro', nome: 'Troca do carro', icone: 'car', foto_url: '', meta_valor: 45000, data_alvo: `${new Date().getFullYear() + 2}-12-01`, valor_inicial: 2800, prioridade: 3, status: 'votação', versiculo: 'Provérbios 21:5', criado_por: 'u_luiz', criado_em: hoje },
     { id: 'p_bike', nome: 'Bicicleta da Júlia', icone: 'bike', foto_url: '', meta_valor: 900, data_alvo: somarMeses(compAtual, 5) + '-01', valor_inicial: 120, prioridade: 4, status: 'ativo', versiculo: 'Provérbios 13:11', criado_por: 'u_julia', criado_em: somarMeses(compAtual, -3) + '-01' },
   ]
@@ -507,7 +507,13 @@ function gerarAvisos(b: Banco): Aviso[] {
     if (atual > al.limite) avisos.push({ id: `av_al_${al.id}`, data: hoje, tipo: 'alerta_personalizado', titulo: al.nome, detalhe: `${moeda(atual)} no mês (limite ${moeda(al.limite)})`, gravidade: 'red', acao: { rotulo: 'ver', rota: `/tipo/t_variaveis?categoria=${al.categoria_id}` } })
   }
   const lidos = new Set(b.avisos.filter((a) => a.lido).map((a) => a.id))
-  return avisos.map((a) => ({ ...a, lido: lidos.has(a.id) }))
+  // Ordem: o que exige ação (vencimentos, duplicada, assinatura nova, sem categoria, alertas) e só os 2 maiores desvios de padrão.
+  const prioridade: Record<Aviso['tipo'], number> = { vencimento: 0, cobranca_duplicada: 1, alerta_personalizado: 2, nova_assinatura: 3, sem_categoria: 4, fora_do_padrao: 5, tendencia: 6, fechamento: 7 }
+  const foraDoPadrao = avisos.filter((a) => a.tipo === 'fora_do_padrao').sort((x, y) => Number(y.titulo.match(/(\d+)%/)?.[1] ?? 0) - Number(x.titulo.match(/(\d+)%/)?.[1] ?? 0)).slice(0, 2)
+  return avisos
+    .filter((a) => a.tipo !== 'fora_do_padrao' || foraDoPadrao.includes(a))
+    .sort((x, y) => prioridade[x.tipo] - prioridade[y.tipo])
+    .map((a) => ({ ...a, lido: lidos.has(a.id) }))
 }
 
 function alertasCalculados(b: Banco): Alerta[] {

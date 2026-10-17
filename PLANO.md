@@ -24,12 +24,22 @@ Fases da v2 (seção 12 do prompt):
 
 | Fase | Entrega | Estado |
 |---|---|---|
-| 1 | `setup.gs` (Tipos, cardápio, versículos), API, PWA, tokens visuais, barra lateral/cabeçalho, 4 cards, lançamento por cardápio, convites e PIN | 🔄 |
-| 2 | Painel completo no padrão da referência, filtros ano/mês/membro, orçado × realizado, `seed_exemplo()` | 🔄 |
-| 3 | Foto do cupom (+ NFC-e), voz, upload de faturas, Gmail e `_Entrada`, contas a pagar com avisos | 🔄 (código da v1 adaptado) |
-| 4 | Cartões, webhook de SMS, Atalho iPhone, macro Android, alertas por e-mail, conciliação, Caixa de Entrada | 🔄 (código da v1 adaptado) |
-| 5 | Assistente (conversa, lançar pelo chat, tool use), rotinas, alertas personalizados, previsão de saídas | 🔄 |
-| 6 | Projetos, votação, reunião mensal, patrimônio, construtor de brasão, capa, bot Telegram, tema claro, offline, backup | 🔄 |
+| 1 | `setup.gs` (Tipos, cardápio, versículos), API, PWA, tokens visuais, barra lateral/cabeçalho, 4 cards, lançamento por cardápio, convites e PIN | ✅ código · ⏸️ aceite real (instalar no iPhone/Android) |
+| 2 | Painel completo no padrão da referência, filtros ano/mês/membro, orçado × realizado, `seed_exemplo()` | ✅ (capturas 1440/390 comparadas com `docs/referencia/ref_*.png`) |
+| 3 | Foto do cupom (+ NFC-e), voz, upload de faturas, Gmail e `_Entrada`, contas a pagar com avisos | ✅ código · ⏸️ aceite com cupom real e PDF da Copel (precisa da chave do Claude) |
+| 4 | Cartões, webhook de SMS, Atalho iPhone, macro Android, alertas por e-mail, conciliação, Caixa de Entrada | ✅ código · ⏸️ aceite com SMS real no iPhone |
+| 5 | Assistente (conversa, lançar pelo chat, tool use), rotinas, alertas personalizados, previsão de saídas | ✅ (sem chave: regras locais; com chave: tool use no Apps Script) |
+| 6 | Projetos, votação, reunião mensal, patrimônio, construtor de brasão, capa, bot Telegram, tema claro, offline, backup | ✅ código · ⏸️ bot do Telegram depende do token do @BotFather |
+
+Verificação da v2: `npm test` 45 testes · `node apps-script/testes/executar.mjs` 128 testes · build limpo · nenhum emoji em `app/src` · capturas em `app/capturas/` (`npm run capturas` e `TAMANHO=desktop npm run capturas`).
+
+Simplificações conhecidas da v2:
+- **Ícones do brasão**: o Apps Script não rasteriza SVG; os PNGs 192/512 são baixados na tela Brasão e substituem `app/public/icones/` + `brasao.svg` antes de republicar (ou `npm run icones`).
+- **Push nativo**: continua via serviço externo opcional; sem ele os avisos vão por e-mail e Telegram.
+- **Avisos do vigia**: vencimentos e "sem categoria" são recalculados a cada chamada; tendências e fechamento vivem na aba `Avisos`.
+- **Webhook do Telegram** valida uma chave na URL (o Apps Script não expõe cabeçalhos); foto pendente fica 30 min no CacheService.
+- **Categorias desativadas** só reaparecem na planilha (o `bootstrap` devolve só as ativas).
+- **E-mail do resumo** vai como chave extra em `salvar_config` (`email_resumo`), que o servidor aceita.
 
 Decisões da v2:
 1. **Tokens e classes CSS copiados da referência** para `app/src/index.css` (`.side`, `.gcard`, `.dash`, `.chip`, `.tabs`, `.msg`, `.bottom`…). As telas usam essas classes, não inventam outras.
