@@ -3,7 +3,8 @@
  * acessibilidade e avisos ("toasts" com desfazer).
  */
 import { create } from 'zustand'
-import type { Bootstrap, Categoria, Grupo, Usuario, Config, Projeto, Cartao, ContaFixa, Versiculo } from '../tipos'
+import type { Bootstrap, Categoria, Grupo, Usuario, Config, Projeto, Cartao, ContaFixa, Versiculo, RegraLoja } from '../tipos'
+import { competenciaDe } from '../util/formato'
 import { api, lerSessao, salvarSessao, type Sessao } from '../api/cliente'
 import { sincronizarFila, tamanhoFila, aoMudarFila } from '../api/fila'
 
@@ -29,7 +30,14 @@ export function aplicarPreferencias(p: Preferencias) {
   raiz.dataset.letra = p.letra
   raiz.dataset.contraste = p.alto_contraste ? 'alto' : 'normal'
   const meta = document.querySelector('meta[name="theme-color"]')
-  if (meta) meta.setAttribute('content', p.tema === 'claro' ? '#F4F4F8' : '#0D0E23')
+  if (meta) meta.setAttribute('content', '#0D0E23')
+}
+
+/** Filtros globais do painel (ano, mês, membro) — vivem na barra lateral/cabeçalho. */
+export interface Filtros {
+  ano: number
+  mes: number // 1..12
+  membro: string // '' = toda a família
 }
 
 export interface Aviso {
@@ -47,8 +55,10 @@ interface Estado {
   preferencias: Preferencias
   avisos: Aviso[]
   pendentesCaixa: number
+  contasAPagar: number
   filaOffline: number
   online: boolean
+  filtros: Filtros
 
   // Ações
   iniciar: () => Promise<void>
@@ -63,6 +73,9 @@ interface Estado {
   atualizarCartoes: (k: Cartao[]) => void
   atualizarContasFixas: (f: ContaFixa[]) => void
   setPendentesCaixa: (n: number) => void
+  setContasAPagar: (n: number) => void
+  setFiltros: (f: Partial<Filtros>) => void
+  atualizarRegrasLoja: (r: RegraLoja[]) => void
   salvarPreferencias: (p: Partial<Preferencias>) => void
   avisar: (texto: string, opcoes?: { tipo?: Aviso['tipo']; desfazer?: Aviso['desfazer']; duracao?: number }) => void
   fecharAviso: (id: number) => void
@@ -78,7 +91,9 @@ export const useSessao = create<Estado>((set, get) => ({
   preferencias: lerPreferencias(),
   avisos: [],
   pendentesCaixa: 0,
+  contasAPagar: 0,
   filaOffline: 0,
+  filtros: { ano: Number(competenciaDe().slice(0, 4)), mes: Number(competenciaDe().slice(5, 7)), membro: '' },
   online: typeof navigator === 'undefined' ? true : navigator.onLine,
 
   iniciar: async () => {
@@ -135,6 +150,9 @@ export const useSessao = create<Estado>((set, get) => ({
   atualizarCartoes: (cartoes) => set((e) => (e.boot ? { boot: { ...e.boot, cartoes } } : {})),
   atualizarContasFixas: (contas_fixas) => set((e) => (e.boot ? { boot: { ...e.boot, contas_fixas } } : {})),
   setPendentesCaixa: (n) => set({ pendentesCaixa: n }),
+  setContasAPagar: (n) => set({ contasAPagar: n }),
+  setFiltros: (f) => set((e) => ({ filtros: { ...e.filtros, ...f } })),
+  atualizarRegrasLoja: (regras_loja) => set((e) => (e.boot ? { boot: { ...e.boot, regras_loja } } : {})),
 
   salvarPreferencias: (p) => {
     const novas = { ...get().preferencias, ...p }
@@ -165,5 +183,9 @@ export function categoriaPorId(categorias: Categoria[], id: string | undefined) 
 }
 export function grupoPorId(grupos: Grupo[], id: string | undefined) {
   return grupos.find((g) => g.id === id)
+}
+/** Competência AAAA-MM dos filtros atuais. */
+export function competenciaDosFiltros(f: Filtros): string {
+  return `${f.ano}-${String(f.mes).padStart(2, '0')}`
 }
 export type { Versiculo }

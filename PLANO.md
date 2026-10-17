@@ -1,5 +1,49 @@
 # PLANO.md — Finanças da Família
 
+> App de controle financeiro da família, de uso diário pelo celular e com painel completo no computador. Base cristã de mordomia.
+> Este arquivo acompanha as fases, as decisões técnicas e o que ficou para depois.
+> Legenda: ✅ concluído · 🔄 em andamento · ⬜ a fazer · ⏸️ precisa do Luiz
+
+## Versão 2 (17/10/2026) — padrão visual obrigatório
+
+O prompt v2 (`docs/referencia/PROMPT_v2.md`) trouxe um **contrato visual**: `docs/referencia/referencia_visual.html`.
+O que mudou em relação à versão 1:
+
+| Versão 1 | Versão 2 |
+|---|---|
+| Emojis como ícones, confete, capa com foto na tela inicial | **Sem emojis nem confete.** Ícones de linha **Lucide** (traço 1,75) em quadrado de 34 px com a cor do grupo a 16 % |
+| Tela inicial própria + Painel separado | **Painel é a tela inicial**, idêntico à referência (barra lateral 240 px com brasão, lema, ano, meses, visão e navegação) |
+| 5 cards (Entradas, Contas da Casa, Dia a Dia, Dízimo, Sonhos) | **4 cards de tipo**: Receitas · Despesas fixas · Despesas variáveis · Projetos (nunca aumentam) |
+| Categorias em 5 grupos | **Cardápio** em 3 tipos → grupos → itens, com cores fixas por grupo de análise e aprendizado por loja (`RegrasLoja`) |
+| Perfil Júnior | Perfil **Dependente** |
+| Sem assistente | **Assistente financeiro** (conversa com tool use, rotinas vigia/quinzenal/fechamento, alertas personalizados, previsão de saídas, patrimônio) |
+| Sonhos com termômetro e confete | **Projetos** sóbrios: No ritmo / Atrasado R$ X / Em votação |
+| — | Tela de **capa** (foto + véu + brasão + PIN), bot do **Telegram**, brasão **heráldico** sóbrio |
+
+Fases da v2 (seção 12 do prompt):
+
+| Fase | Entrega | Estado |
+|---|---|---|
+| 1 | `setup.gs` (Tipos, cardápio, versículos), API, PWA, tokens visuais, barra lateral/cabeçalho, 4 cards, lançamento por cardápio, convites e PIN | 🔄 |
+| 2 | Painel completo no padrão da referência, filtros ano/mês/membro, orçado × realizado, `seed_exemplo()` | 🔄 |
+| 3 | Foto do cupom (+ NFC-e), voz, upload de faturas, Gmail e `_Entrada`, contas a pagar com avisos | 🔄 (código da v1 adaptado) |
+| 4 | Cartões, webhook de SMS, Atalho iPhone, macro Android, alertas por e-mail, conciliação, Caixa de Entrada | 🔄 (código da v1 adaptado) |
+| 5 | Assistente (conversa, lançar pelo chat, tool use), rotinas, alertas personalizados, previsão de saídas | 🔄 |
+| 6 | Projetos, votação, reunião mensal, patrimônio, construtor de brasão, capa, bot Telegram, tema claro, offline, backup | 🔄 |
+
+Decisões da v2:
+1. **Tokens e classes CSS copiados da referência** para `app/src/index.css` (`.side`, `.gcard`, `.dash`, `.chip`, `.tabs`, `.msg`, `.bottom`…). As telas usam essas classes, não inventam outras.
+2. **Ícones por nome** (kebab-case Lucide) na planilha; o componente `Icone` mapeia só os ícones usados (tree-shaking).
+3. **Grupos de análise fixos** (Moradia, Contas de consumo, Saúde e educação, Transporte, Alimentação, Lazer, Dízimo e ofertas, Outros) com cores fixas, calculados a partir do grupo da categoria (`grupo_analise`), para donuts, anéis e detalhamento ficarem iguais à referência.
+4. **Aportes em projetos não contam como despesa** (o card Projetos mostra o total guardado; Despesas fixas + variáveis = Despesas do mês).
+5. **Assistente sem chave do Claude** responde por regras locais às perguntas comuns e lança por texto; com a chave, conversa livre com tool use no servidor.
+6. **Filtros globais** (ano, mês, membro) vivem na barra lateral/cabeçalho e valem para todas as telas.
+
+---
+
+## Versão 1 (histórico)
+
+
 > App de celular (PWA) da família para controle de despesas, com o Evangelho como base.
 > Este arquivo acompanha as fases, as decisões técnicas e o que ficou para depois.
 > Legenda: ✅ concluído · 🔄 em andamento · ⬜ a fazer · ⏸️ precisa do Luiz

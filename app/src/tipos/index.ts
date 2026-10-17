@@ -4,10 +4,10 @@
  * exatamente estes campos (em snake_case), e a API devolve/recebe estes objetos.
  */
 
-export type Perfil = 'Administrador' | 'Adulto' | 'Júnior'
+export type Perfil = 'Administrador' | 'Adulto' | 'Dependente'
 export type TipoLancamento = 'receita' | 'despesa'
 export type FormaPgto = 'dinheiro' | 'pix' | 'débito' | 'crédito' | 'boleto'
-export type OrigemLancamento = 'manual' | 'foto' | 'voz' | 'sms' | 'email' | 'fatura' | 'recorrente'
+export type OrigemLancamento = 'manual' | 'foto' | 'voz' | 'chat' | 'sms' | 'email' | 'fatura' | 'recorrente' | 'telegram'
 export type StatusLancamento = 'confirmado' | 'a_confirmar'
 export type StatusConta = 'aberta' | 'paga'
 export type CanalCaixa = 'sms_ios' | 'sms_android' | 'email' | 'fatura'
@@ -34,7 +34,11 @@ export interface Config {
   divisao_viver: number
   valor_gasto_grande: number // acima disso exige decisão do Conselho
   regra_votacao: 'maioria' | 'maioria_mais_pais'
-  junior_ve_salarios: boolean
+  dependente_ve_salarios: boolean
+  rotina_vigia: boolean
+  rotina_quinzenal: boolean
+  rotina_fechamento: boolean
+  telegram_ativo?: boolean
   url_planilha?: string
   url_pasta_drive?: string
 }
@@ -53,28 +57,117 @@ export interface Usuario {
   token?: string // só devolvido para o próprio usuário / administrador
 }
 
-export interface Grupo {
-  id: string
+/** Nome de cor da paleta (seção 2.3 do prompt): indigo, magenta, gold, orange, green, red, lilac, rose, slate. */
+export type CorPaleta = 'indigo' | 'sel' | 'magenta' | 'gold' | 'orange' | 'green' | 'red' | 'lilac' | 'rose' | 'slate'
+
+/** Os 4 cards de tipo da tela inicial: Receitas, Despesas fixas, Despesas variáveis e Projetos. Nunca aumentam. */
+export interface Tipo {
+  id: 't_receitas' | 't_fixas' | 't_variaveis' | 't_projetos'
   nome: string
-  icone: string
-  cor: string
+  icone: string // nome Lucide (kebab-case)
+  cor: CorPaleta
   ordem: number
-  tipo: TipoLancamento | 'projeto'
 }
 
+/** Grupo do cardápio (ex.: Moradia, Alimentação). Só existe dentro de um dos 3 tipos. */
+export interface Grupo {
+  id: string
+  tipo_id: Tipo['id']
+  nome: string
+  cor: CorPaleta
+  /** Agrupamento fixo usado nos gráficos: Moradia, Contas de consumo, Saúde e educação, Transporte, Alimentação, Lazer, Dízimo e ofertas, Outros. */
+  grupo_analise: string
+  ordem: number
+  ativo?: boolean
+}
+
+/** Item do cardápio de despesas/receitas. */
 export interface Categoria {
   id: string
+  tipo_id: Tipo['id']
   grupo_id: string
   nome: string
-  icone: string
-  cor: string
+  icone: string // nome Lucide (kebab-case), ex.: "shopping-cart"
+  cor: CorPaleta
   tipo: TipoLancamento
   fixa: boolean
   orcamento_mensal: number
   palavras_chave: string // "COPEL;SANEPAR"
+  grupo_analise: string
   ativa: boolean
-  subgrupo?: string // "Moradia", "Consumo", "Alimentação"...
-  sensivel?: boolean // Júnior não vê (salários)
+  sensivel?: boolean // Dependente não vê (salários)
+  oculta_cardapio?: boolean // ex.: aporte em projeto (lançado pela tela Projetos)
+}
+
+/** Regra aprendida: esta loja cai sempre nesta categoria. */
+export interface RegraLoja {
+  id: string
+  loja_normalizada: string
+  categoria_id: string
+  criado_por: string
+  criado_em: string
+  acertos: number
+}
+
+/** Alerta personalizado ("Delivery acima de R$ 400/mês → avisar Luiz e Nina"). */
+export interface Alerta {
+  id: string
+  nome: string
+  tipo: 'categoria_acima' | 'grupo_acima' | 'nova_assinatura' | 'cobranca_duplicada' | 'fora_do_padrao'
+  categoria_id?: string
+  grupo_id?: string
+  limite: number
+  avisar: string[] // usuario_id[] (vazio = todos)
+  ativo: boolean
+  ultimo_disparo?: string
+  status_atual?: 'ok' | 'disparado'
+  percentual_atual?: number
+}
+
+/** Patrimônio informado manualmente (contas, investimentos). */
+export interface Patrimonio {
+  id: string
+  nome: string
+  tipo: 'conta' | 'poupanca' | 'investimento' | 'imovel' | 'veiculo' | 'outro'
+  instituicao: string
+  titular_id: string
+  saldos: Array<{ competencia: string; valor: number }>
+  ativo: boolean
+}
+
+/** Aviso gerado pelo vigia diário / análise quinzenal / fechamento. */
+export interface Aviso {
+  id: string
+  data: string
+  tipo: 'fora_do_padrao' | 'cobranca_duplicada' | 'nova_assinatura' | 'vencimento' | 'sem_categoria' | 'tendencia' | 'fechamento' | 'alerta_personalizado'
+  titulo: string
+  detalhe: string
+  gravidade: 'red' | 'warn' | 'proj' | 'ok'
+  acao?: { rotulo: string; rota: string }
+  lido?: boolean
+}
+
+/** Saída prevista (contas, parcelas, assinaturas, faturas) para 30/60/90 dias. */
+export interface SaidaPrevista {
+  id: string
+  data: string
+  titulo: string
+  subtitulo: string
+  valor: number
+  icone: string
+  status: 'lida_do_email' | 'prevista' | 'estimada' | 'parcela' | 'parcial'
+  rota?: string
+}
+
+/** Mensagem do Assistente. */
+export interface MensagemAssistente {
+  id: string
+  papel: 'eu' | 'assistente'
+  texto: string
+  data: string
+  barras?: Array<{ rotulo: string; valor: number; cor?: CorPaleta }>
+  lancamento?: Lancamento
+  etiqueta?: string
 }
 
 export interface Lancamento {
@@ -92,6 +185,7 @@ export interface Lancamento {
   usuario_id: string
   origem: OrigemLancamento
   anexo_url?: string
+  anexo_miniatura?: string
   status: StatusLancamento
   hash_dedup?: string
   criado_em: string
@@ -239,8 +333,10 @@ export interface Bootstrap {
   config: Config
   usuario: Usuario
   usuarios: Usuario[]
+  tipos: Tipo[]
   grupos: Grupo[]
   categorias: Categoria[]
+  regras_loja: RegraLoja[]
   cartoes: Cartao[]
   contas_fixas: ContaFixa[]
   projetos: Projeto[]
@@ -254,6 +350,8 @@ export interface ResumoMes {
   entrou: number
   saiu: number
   sobrou: number
+  por_tipo: Record<string, { realizado: number; orcado: number }>
+  projetos: { guardado_total: number; percentual_medio: number; ativos: number }
   por_grupo: Record<string, { realizado: number; orcado: number }>
   por_categoria: Record<string, { realizado: number; orcado: number }>
   por_usuario: Record<string, number>
@@ -269,6 +367,9 @@ export interface DadosPainel {
     despesas: number
     salarios: number
     outras_receitas: number
+    previsto?: boolean // mês futuro: valores previstos (orçamento/recorrentes)
+    por_tipo: Record<string, number>
+    por_grupo_analise: Record<string, number>
     por_grupo: Record<string, number>
     por_categoria: Record<string, number>
     por_usuario: Record<string, number>

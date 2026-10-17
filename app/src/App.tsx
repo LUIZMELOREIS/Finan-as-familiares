@@ -1,24 +1,24 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useSessao } from './store/sessao'
-import { Layout } from './componentes/Layout'
+import { Casca } from './componentes/Casca'
 import { Carregando } from './componentes/Carregando'
 
 // Carregamento preguiçoso: cada tela só é baixada quando aberta.
-const Inicio = lazy(() => import('./paginas/Inicio'))
-const Grupo = lazy(() => import('./paginas/Grupo'))
-const Lancar = lazy(() => import('./paginas/Lancar'))
 const Painel = lazy(() => import('./paginas/Painel'))
-const CaixaEntrada = lazy(() => import('./paginas/CaixaEntrada'))
-const Sonhos = lazy(() => import('./paginas/Sonhos'))
+const Tipo = lazy(() => import('./paginas/Tipo'))
+const Lancar = lazy(() => import('./paginas/Lancar'))
+const Contas = lazy(() => import('./paginas/Contas'))
+const Projetos = lazy(() => import('./paginas/Projetos'))
 const Projeto = lazy(() => import('./paginas/Projeto'))
+const Assistente = lazy(() => import('./paginas/Assistente'))
+const CaixaEntrada = lazy(() => import('./paginas/CaixaEntrada'))
 const Conselho = lazy(() => import('./paginas/Conselho'))
 const Reuniao = lazy(() => import('./paginas/Reuniao'))
-const Contas = lazy(() => import('./paginas/Contas'))
-const Mais = lazy(() => import('./paginas/Mais'))
+const Patrimonio = lazy(() => import('./paginas/Patrimonio'))
+const Mesada = lazy(() => import('./paginas/Mesada'))
 const Configuracoes = lazy(() => import('./paginas/Configuracoes'))
 const Entrar = lazy(() => import('./paginas/Entrar'))
-const Mesada = lazy(() => import('./paginas/Mesada'))
 const Tutorial = lazy(() => import('./paginas/Tutorial'))
 const Brasao = lazy(() => import('./paginas/Brasao'))
 const CapturaAutomatica = lazy(() => import('./paginas/CapturaAutomatica'))
@@ -39,7 +39,7 @@ export default function App() {
 
   useEffect(() => { iniciar() }, [iniciar])
 
-  if (carregando) return <div className="min-h-dvh flex items-center justify-center"><Carregando texto="Abrindo o app da família…" /></div>
+  if (carregando) return <div className="capa"><Carregando texto="Abrindo o app da família…" /></div>
 
   return (
     <HashRouter>
@@ -54,22 +54,26 @@ export default function App() {
           ) : (
             <>
               <Route path="/tutorial" element={<Tutorial />} />
-              <Route path="/lancar" element={<Lancar />} />
-              <Route element={<Layout />}>
-                <Route index element={<Inicio />} />
-                <Route path="/grupo/:id" element={<Grupo />} />
-                <Route path="/painel" element={<Painel />} />
+              <Route element={<Casca />}>
+                <Route index element={<Painel />} />
+                <Route path="/tipo/:id" element={<Tipo />} />
+                <Route path="/lancar" element={<Lancar />} />
+                <Route path="/contas" element={<Contas />} />
+                <Route path="/projetos" element={<Projetos />} />
+                <Route path="/projetos/:id" element={<Projeto />} />
+                <Route path="/assistente" element={<Assistente />} />
                 <Route path="/caixa" element={<CaixaEntrada />} />
-                <Route path="/sonhos" element={<Sonhos />} />
-                <Route path="/sonhos/:id" element={<Projeto />} />
                 <Route path="/conselho" element={<Conselho />} />
                 <Route path="/reuniao" element={<Reuniao />} />
-                <Route path="/contas" element={<Contas />} />
+                <Route path="/patrimonio" element={<Patrimonio />} />
                 <Route path="/mesada" element={<Mesada />} />
-                <Route path="/mais" element={<Mais />} />
                 <Route path="/configuracoes/*" element={<Configuracoes />} />
                 <Route path="/brasao" element={<Brasao />} />
                 <Route path="/captura" element={<CapturaAutomatica />} />
+                {/* rotas da versão 1 */}
+                <Route path="/painel" element={<Navigate to="/" replace />} />
+                <Route path="/sonhos" element={<Navigate to="/projetos" replace />} />
+                <Route path="/mais" element={<Navigate to="/configuracoes" replace />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
             </>

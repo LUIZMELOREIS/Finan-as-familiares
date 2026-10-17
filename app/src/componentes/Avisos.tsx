@@ -1,4 +1,5 @@
 import { useSessao } from '../store/sessao'
+import { Icone } from './Icone'
 
 /** Avisos ("toasts") com botão Desfazer de 5 segundos. */
 export function Avisos() {
@@ -6,15 +7,13 @@ export function Avisos() {
   const fechar = useSessao((e) => e.fecharAviso)
   if (!avisos.length) return null
   return (
-    <div className="fixed left-0 right-0 z-[60] flex flex-col items-center gap-2 px-4" style={{ bottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }} aria-live="polite">
+    <div className="fixed left-0 right-0 z-[60] flex flex-col items-center gap-2 px-4" style={{ bottom: 'calc(84px + env(safe-area-inset-bottom, 0px))' }} aria-live="polite">
       {avisos.map((a) => (
-        <div key={a.id} className={`aviso card flex items-center gap-3 px-4 py-3 w-full max-w-md ${a.tipo === 'erro' ? 'border-vermelho' : a.tipo === 'ok' ? 'border-verde' : ''}`}>
-          <span className="text-xl" aria-hidden>{a.tipo === 'erro' ? '⚠️' : a.tipo === 'ok' ? '✅' : 'ℹ️'}</span>
-          <span className="flex-1 text-sm">{a.texto}</span>
-          {a.desfazer && (
-            <button className="botao botao-amarelo !min-h-10 !px-3 text-sm" onClick={async () => { await a.desfazer?.(); fechar(a.id) }}>↩ Desfazer</button>
-          )}
-          <button className="botao botao-fantasma !min-h-10 !min-w-10 !p-1" onClick={() => fechar(a.id)} aria-label="Fechar aviso">✕</button>
+        <div key={a.id} className="aviso-toast card flex items-center gap-3 w-full max-w-md" style={{ padding: '10px 14px', borderLeft: `3px solid ${a.tipo === 'erro' ? 'var(--red)' : a.tipo === 'ok' ? 'var(--green)' : 'var(--sel)'}` }}>
+          <Icone nome={a.tipo === 'erro' ? 'circle-alert' : a.tipo === 'ok' ? 'circle-check' : 'info'} />
+          <span className="flex-1" style={{ fontSize: 13 }}>{a.texto}</span>
+          {a.desfazer && <button className="btn btn-ghost btn-sm" onClick={async () => { await a.desfazer?.(); fechar(a.id) }}><Icone nome="undo-2" />Desfazer</button>}
+          <button className="icon-btn" onClick={() => fechar(a.id)} aria-label="Fechar aviso"><Icone nome="x" /></button>
         </div>
       ))}
     </div>

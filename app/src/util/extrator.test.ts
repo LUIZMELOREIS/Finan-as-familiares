@@ -3,7 +3,7 @@ import dados from '../../../dados/grupos_categorias.json'
 import type { Categoria } from '../tipos'
 import { extrairValor, lerSms, extrairDeTexto, sugerirCategoria, extrairFormaPgto } from './extrator'
 
-const categorias = (dados.categorias as Array<Omit<Categoria, 'ativa'>>).map((c) => ({ ...c, ativa: true })) as Categoria[]
+const categorias = dados.categorias as Categoria[]
 
 describe('extração de valor', () => {
   it('lê valores em várias formas', () => {

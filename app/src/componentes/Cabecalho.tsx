@@ -1,18 +1,19 @@
-import { useNavigate } from 'react-router-dom'
 import type { ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Icone } from './Icone'
 
-/** Cabeçalho de página interna com botão Voltar grande. */
-export function Cabecalho({ titulo, voltarPara, acao }: { titulo: string; voltarPara?: string; acao?: ReactNode }) {
+/** Barra de título de uma tela (igual ao `.topbar` da referência), com botão Voltar opcional. */
+export function Cabecalho({ titulo, subtitulo, voltarPara, acoes }: { titulo: string; subtitulo?: string; voltarPara?: string; acoes?: ReactNode }) {
   const nav = useNavigate()
   return (
-    <header className="area-segura-topo sticky top-0 z-30 bg-painel/90 backdrop-blur border-b border-borda">
-      <div className="max-w-3xl mx-auto flex items-center gap-2 px-3 py-2">
-        <button className="botao botao-fantasma !px-2" onClick={() => (voltarPara ? nav(voltarPara) : nav(-1))} aria-label="Voltar">
-          <span className="text-xl" aria-hidden>‹</span> <span className="text-sm">Voltar</span>
-        </button>
-        <h1 className="flex-1 text-lg font-bold truncate">{titulo}</h1>
-        {acao}
+    <div className="topbar">
+      <div className="flex items-center gap-2 min-w-0">
+        {voltarPara !== undefined && (
+          <button className="icon-btn" style={{ marginLeft: -8 }} onClick={() => (voltarPara ? nav(voltarPara) : nav(-1))} aria-label="Voltar"><Icone nome="chevron-left" /></button>
+        )}
+        <div className="min-w-0"><h2 className="truncate">{titulo}</h2>{subtitulo && <p>{subtitulo}</p>}</div>
       </div>
-    </header>
+      {acoes && <div className="acoes">{acoes}</div>}
+    </div>
   )
 }

@@ -118,3 +118,48 @@ Quando `VITE_API_URL` não está definido (ou o usuário escolhe "Experimentar c
 o app usa `src/api/mock.ts`, que implementa as mesmas ações em cima de dados locais (IndexedDB),
 com 12 meses de exemplo. Serve para testes visuais, para a Fase 2 e para quem quer conhecer o app
 antes de instalar o Apps Script.
+
+---
+
+## Versão 2 — acréscimos
+
+Mudanças da versão 2 (referência visual `referencia_visual.html`):
+
+- Perfil **`Júnior` passou a se chamar `Dependente`** (mesmas regras).
+- Nova aba **`Tipos`** (Receitas / Despesas fixas / Despesas variáveis / Projetos). `Grupos` ganhou `tipo_id`, `cor` (nome da paleta) e `grupo_analise`; `Categorias` ganhou `tipo_id`, `grupo_analise`, `oculta_cardapio` e usa **nome de ícone Lucide** em `icone`.
+- `bootstrap` devolve também `tipos` e `regras_loja`. `resumo_mes` devolve `por_tipo` e `projetos`. `painel` devolve `por_tipo` e `por_grupo_analise` por mês e marca meses futuros como `previsto`.
+- Config ganhou `dependente_ve_salarios` (antes `junior_ve_salarios`), `rotina_vigia`, `rotina_quinzenal`, `rotina_fechamento`, `telegram_ativo`.
+- Novas abas: `RegrasLoja`, `Alertas`, `Patrimonio`, `Avisos`, `Conversas` (histórico do assistente), `Telegram` (chat_id ↔ usuário).
+
+| acao | perfil mínimo | parâmetros | devolve |
+|---|---|---|---|
+| `listar_regras_loja` | Dependente | — | `RegraLoja[]` |
+| `salvar_regra_loja` | Dependente | `loja`, `categoria_id` (chamado automaticamente quando o usuário corrige a categoria sugerida) | `RegraLoja` |
+| `proximas_saidas` | Adulto | `dias: 30\|60\|90` | `SaidaPrevista[]` (contas fixas, parcelas, assinaturas, faturas de cartão) |
+| `listar_avisos` | Adulto | `limite?` | `Aviso[]` (vigia diário, quinzenal, fechamento, alertas personalizados) |
+| `marcar_aviso_lido` | Adulto | `id` | `Aviso` |
+| `listar_alertas` | Adulto | — | `Alerta[]` (com `status_atual` e `percentual_atual` calculados) |
+| `salvar_alerta` | Adulto | `alerta` | `Alerta` |
+| `excluir_alerta` | Adulto | `id` | `{ id }` |
+| `assistente` | Dependente | `mensagem`, `historico?: MensagemAssistente[]`, `imagem_base64?`, `mime?` | `MensagemAssistente` (resposta; se a mensagem for um lançamento, devolve `lancamento` já gravado e `etiqueta: 'lançado'`) |
+| `assistente_sugestoes` | Dependente | — | `string[]` (chips de perguntas sugeridas para o momento) |
+| `listar_conversa` | Dependente | `limite?` | `MensagemAssistente[]` (histórico do usuário) |
+| `listar_patrimonio` | Adulto | — | `Patrimonio[]` |
+| `salvar_patrimonio` | Administrador | `patrimonio` | `Patrimonio` |
+| `registrar_saldo_patrimonio` | Adulto | `id`, `competencia`, `valor` | `Patrimonio` |
+| `relatorio_mensal` | Adulto | `competencia` | `{ markdown, projecao: Array<{competencia, receitas, despesas, saldo}> }` |
+| `vincular_telegram` | Dependente | — | `{ codigo, url_bot }` (código de 6 dígitos para enviar ao bot) |
+
+### Assistente — como funciona no servidor
+
+1. O Apps Script monta um **resumo agregado** (totais por categoria/grupo/mês dos últimos 12 meses, médias de 3 meses, contas a vencer, projetos com ritmo, assinaturas detectadas). Nada de dados pessoais além do apelido dos membros.
+2. Envia ao Claude (Messages API) com **tool use**: `buscar_lancamentos(filtros)`, `total_por_categoria(competencia, categoria_id|grupo_id)`, `projetar_meta(projeto_id, corte_mensal?)`, `lancar_despesa(valor, categoria_id, descricao, forma_pgto, data)`, `proximas_saidas(dias)`. O servidor executa cada ferramenta na planilha e devolve o resultado ao modelo até a resposta final.
+3. Resposta em português, curta, com números em `R$ 1.234,56`; quando houver comparação, devolve `barras[]` para a mini-barra.
+4. Sem chave do Claude: o assistente responde às perguntas mais comuns por **regras locais** (gasto por categoria, assinaturas, contas da semana, fechamento do mês, lançar por texto via `extrairDeTexto`) e avisa que a conversa livre precisa da chave.
+
+### Webhook do Telegram
+
+```
+POST <URL>?telegram=1   (corpo: update do Bot API)
+```
+`/start CODIGO` vincula o chat ao usuário (código de `vincular_telegram`). Texto → `assistente`; foto → `ler_imagem` tipo cupom → confirmação por botões inline. Avisos das rotinas são enviados ao chat vinculado quando `telegram_ativo`. Token do bot em Script Properties `TOKEN_TELEGRAM`; o `setWebhook` é feito por `configurarTelegram()` em `telegram.gs`.
