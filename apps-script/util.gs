@@ -34,16 +34,21 @@ function zeros(n, tamanho) {
   return s;
 }
 
+/** É um objeto Date (checagem por "duck typing", para não depender do realm). */
+function ehData(v) {
+  return !!v && typeof v === 'object' && typeof v.getTime === 'function';
+}
+
 /** Objeto Date → "aaaa-mm-dd" (no fuso local do script). */
 function dataParaIso(d) {
-  if (!(d instanceof Date) || isNaN(d.getTime())) return '';
+  if (!ehData(d) || isNaN(d.getTime())) return '';
   if (typeof Utilities !== 'undefined' && Utilities.formatDate) return Utilities.formatDate(d, FUSO, 'yyyy-MM-dd');
   return d.getFullYear() + '-' + zeros(d.getMonth() + 1) + '-' + zeros(d.getDate());
 }
 
 /** Objeto Date → "aaaa-mm-ddThh:mm:ss" (no fuso local do script). */
 function dataHoraParaIso(d) {
-  if (!(d instanceof Date) || isNaN(d.getTime())) return '';
+  if (!ehData(d) || isNaN(d.getTime())) return '';
   if (typeof Utilities !== 'undefined' && Utilities.formatDate) return Utilities.formatDate(d, FUSO, "yyyy-MM-dd'T'HH:mm:ss");
   return dataParaIso(d) + 'T' + zeros(d.getHours()) + ':' + zeros(d.getMinutes()) + ':' + zeros(d.getSeconds());
 }
@@ -68,7 +73,7 @@ function isoParaData(iso) {
 /** dd/mm/aaaa → ISO; se já for ISO, devolve só a parte da data. */
 function normalizarDataIso(texto) {
   if (!texto) return '';
-  if (texto instanceof Date) return dataParaIso(texto);
+  if (ehData(texto)) return dataParaIso(texto);
   const s = String(texto).trim();
   const br = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
   if (br) {

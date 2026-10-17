@@ -70,7 +70,7 @@ Competência é `AAAA-MM`.
 | `importar_fatura` | Adulto | `imagem_base64` ou `texto` (OFX/CSV), `cartao_id` | `LeituraExtraida` com `compras[]` e `ja_lancada` |
 | `confirmar_importacao` | Adulto | `cartao_id`, `compras[]` | `ItemCaixaEntrada[]` criados |
 | `listar_projetos` | Júnior | — | `Projeto[]` (com `valor_atual`) |
-| `salvar_projeto` | Adulto | `projeto` | `Projeto` |
+| `salvar_projeto` | Júnior (só o próprio sonho) / Adulto | `projeto` | `Projeto` |
 | `aportar` | Júnior | `projeto_id`, `valor`, `observacao?` | `Aporte` |
 | `listar_aportes` | Júnior | `projeto_id` | `Aporte[]` |
 | `listar_decisoes` | Júnior | `status?` | `Decisao[]` (com `votos`) |
