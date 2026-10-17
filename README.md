@@ -1,2 +1,144 @@
-# Finan-as-familiares
-Criar app para controle de finanças da familia
+# 🏡 Finanças da Família
+
+> *"Eu e a minha casa serviremos ao Senhor."* — Josué 24:15
+
+Um **app de celular da família** para controlar as finanças da casa — instalável pela tela inicial do iPhone e do Android, **sem loja de aplicativos**. Cada integrante lança os gastos em segundos (**foto do cupom, voz ou digitação**), as contas da casa (luz, água, internet…) são **lidas automaticamente**, os gastos de cartão que alguém esqueceu são **capturados pelos SMS/alertas do banco**, e a família **decide junto** onde alocar o dinheiro e acompanha a poupança de cada **sonho** (viagem, carro, reserva).
+
+Os dados ficam **no seu Google Drive**, numa planilha que você pode abrir a qualquer hora. A base é a **mordomia cristã**: Deus é o dono, nós administramos.
+
+| | |
+|---|---|
+| 📱 App | PWA (React + Vite + TypeScript + Tailwind) — pasta [`app/`](app) |
+| ⚙️ API | Google Apps Script publicado como App da Web — pasta [`apps-script/`](apps-script) |
+| 🗄️ Banco | Google Planilha `BD_Financas_Familia` dentro de uma pasta no seu Drive |
+| 🧠 Leitura inteligente | API do Claude (cupons, faturas, SMS); fallback: OCR do Drive + regras |
+| 📄 Documentos | [`PLANO.md`](PLANO.md) · [`GUIA_DA_FAMILIA.md`](GUIA_DA_FAMILIA.md) · [`GUIA_CAPTURA_SMS.md`](GUIA_CAPTURA_SMS.md) · [`docs/API.md`](docs/API.md) |
+
+---
+
+## Experimentar em 1 minuto (sem instalar nada)
+
+```bash
+cd app
+npm install
+npm run dev
+```
+
+Abra o endereço que aparecer (ex.: `http://localhost:5173`) e toque em **"Experimentar com dados de exemplo"**. É o **modo demonstração**: 12 meses de lançamentos fictícios, 4 pessoas, 2 cartões, 4 sonhos. Tudo funciona, só não grava no Drive.
+
+Para ver em tamanho de celular no computador: pressione `F12` → ícone de celular → escolha "iPhone 14" (390×844).
+
+---
+
+## Instalação completa (para leigos) — cerca de 30 minutos
+
+Você vai precisar apenas de uma **conta Google** (Gmail). Não precisa de cartão de crédito nem de servidor.
+
+### Parte 1 — Criar o "cérebro" no Google (Apps Script)
+
+1. Entre em **[script.google.com](https://script.google.com)** com a sua conta Google.
+2. Clique em **"Novo projeto"**. Dê o nome **"Finanças da Família"** (clique em "Projeto sem título" no topo para renomear).
+3. Na barra lateral esquerda, ao lado de **"Arquivos"**, clique no **"+"** → **"Script"** e crie um arquivo para **cada** arquivo `.gs` da pasta [`apps-script/`](apps-script) deste repositório, com o **mesmo nome** (ex.: `setup`, `api`, `bd`, …). Em cada um, apague o conteúdo e **cole o conteúdo do arquivo correspondente**.
+   - Dica: o arquivo `Código.gs` que já vem no projeto pode receber o conteúdo de `api.gs`.
+   - Se preferir fazer isso com um comando só, veja ["Publicar com o clasp"](apps-script/README.md#publicar-com-o-clasp) no README da pasta.
+4. Clique na **engrenagem ⚙️ "Configurações do projeto"** (barra lateral):
+   - Marque **"Mostrar o arquivo de manifesto appsscript.json no editor"** e cole nele o conteúdo de `apps-script/appsscript.json`.
+   - Em **"Propriedades do script"** → "Adicionar propriedade do script", crie:
+     | Propriedade | Valor |
+     |---|---|
+     | `SOBRENOME` | o sobrenome da família (ex.: `Melo Reis`) |
+     | `CHAVE_API_CLAUDE` | sua chave da API do Claude (começa com `sk-ant-…`; crie em [console.anthropic.com](https://console.anthropic.com)). **Opcional**: sem ela, a leitura de cupons usa o OCR do Google (menos preciso). |
+     | `URL_APP` | o endereço onde o app vai ficar (Parte 3). Pode preencher depois. |
+5. Ative o serviço **Drive** (para o OCR de reserva): barra lateral → **"Serviços" +** → escolha **"Drive API"** → **Adicionar**.
+6. Volte ao editor, abra o arquivo **`setup`**, escolha a função **`instalar`** na lista ao lado de "Depurar" e clique em **▶ Executar**.
+7. O Google vai pedir **autorização**: clique em "Revisar permissões" → escolha sua conta → "Avançado" → "Acessar Finanças da Família (não seguro)" → "Permitir". (É "não seguro" só porque o app é seu, não foi publicado na loja do Google.)
+8. Ao terminar, abra o **"Registro de execução"** (embaixo). Ele mostra:
+   - o link da **pasta no Drive** `Finanças da Família <Sobrenome>` e da **planilha** `BD_Financas_Familia`;
+   - o **`token_familia`** (guarde-o; também está na aba `Config` da planilha);
+   - o **PIN inicial do Administrador: `1234`** (troque depois em Configurações → Membros).
+
+### Parte 2 — Publicar como App da Web (a "API")
+
+1. No editor do Apps Script, clique em **"Implantar" → "Nova implantação"**.
+2. Clique na **engrenagem ⚙️** ao lado de "Selecionar tipo" → **"App da Web"**.
+3. Preencha:
+   - **Descrição**: `Finanças da Família v1`
+   - **Executar como**: **Eu** (seu e-mail)
+   - **Quem pode acessar**: **Qualquer pessoa**
+4. Clique em **"Implantar"** e autorize novamente se pedir.
+5. **Copie a URL do App da Web** (termina em `/exec`). Essa é a **URL da API**.
+6. Teste no navegador: abra `SUA_URL?acao=ping` → deve aparecer `{"ok":true,...}`.
+
+> Cada vez que você atualizar o código no futuro: **Implantar → Gerenciar implantações → ✏️ Editar → Versão: Nova versão → Implantar**. A URL continua a mesma.
+
+### Parte 3 — Publicar o app (grátis)
+
+**Opção A — GitHub Pages (recomendada):**
+1. No GitHub, abra este repositório → **Settings → Pages → Source: "GitHub Actions"**.
+2. Em **Settings → Secrets and variables → Actions → Variables → New repository variable**, crie:
+   - `VITE_API_URL` = a URL da API (Parte 2)
+   - `VITE_TOKEN_FAMILIA` = o token da família (Parte 1, passo 8)
+3. Faça qualquer push na branch `main` (ou rode o workflow "Publicar app no GitHub Pages" em **Actions → Run workflow**).
+4. O app ficará em `https://<seu-usuario>.github.io/<nome-do-repositorio>/`. Coloque esse endereço em `URL_APP` nas Propriedades do script (Parte 1, passo 4).
+
+**Opção B — Vercel:** importe o repositório em [vercel.com](https://vercel.com), *Root Directory* = `app`, e crie as mesmas variáveis de ambiente. Para um subdomínio próprio (ex.: `familia.seudominio.com.br`), adicione o domínio em *Settings → Domains*.
+
+### Parte 4 — Instalar no celular de cada um
+
+1. O administrador abre o app, faz login (escolhe o avatar "Administrador", PIN `1234`) e vai em **Mais → Configurações → Membros → Convidar**. Escolha o perfil (Administrador / Adulto / Júnior) e **envie o link ou mostre o QR Code**.
+2. A pessoa abre o link **no navegador do celular** (Safari no iPhone, Chrome no Android) e segue as instruções na tela:
+   - **iPhone (Safari)**: toque no botão **Compartilhar** (quadrado com seta ⬆️, embaixo) → role e toque em **"Adicionar à Tela de Início"** → **Adicionar**.
+   - **Android (Chrome)**: toque no menu **⋮** (canto superior direito) → **"Instalar app"** ou **"Adicionar à tela inicial"** → **Instalar**.
+3. Abra o app pelo ícone novo na tela inicial, escolha o **avatar**, o **apelido** e crie um **PIN de 4 dígitos**. Pronto — o celular fica lembrado.
+
+### Parte 5 — Contas por e-mail (opcional, mas vale muito a pena)
+
+Para as faturas de luz, água, gás, internet, plano de saúde e escola entrarem sozinhas:
+
+1. No Gmail (computador), clique na **engrenagem → Ver todas as configurações → Filtros e endereços bloqueados → Criar novo filtro**.
+2. Em **"De"**, coloque os remetentes separados por `OR`, por exemplo:
+   `@copel.com OR @sanepar.com.br OR @compagas.com.br OR @vivo.com.br OR @unimed.coop.br`
+3. Clique em **"Criar filtro"** → marque **"Aplicar o marcador"** → **"Novo marcador…"** → nome **`Contas da Casa`** → Criar filtro.
+4. Repita para os **alertas de compra do cartão** (ative-os no app do seu banco): crie um filtro com os remetentes do banco e o marcador **`Alertas Cartão`**.
+5. O Apps Script lê esses e-mails **a cada hora**, salva os PDFs no Drive em `Contas da Casa/AAAA/MM/`, extrai valor, vencimento e código de barras e marca a conversa como `Processado`.
+
+Também existe a pasta **`Contas da Casa/_Entrada`** no Drive: qualquer PDF que você jogar lá é processado e movido para a pasta do mês.
+
+### Parte 6 — Captura dos SMS do cartão
+
+Veja o [**GUIA_CAPTURA_SMS.md**](GUIA_CAPTURA_SMS.md) (iPhone com o app Atalhos, Android com o MacroDroid). O próprio app tem a tela **Mais → Captura automática** com a URL e o seu token já preenchidos.
+
+---
+
+## Estrutura do repositório
+
+```
+app/                 PWA (React). `npm run dev`, `npm test`, `npm run build`, `npm run capturas`
+apps-script/         Back-end Google Apps Script (.gs) + README de publicação + testes das funções puras
+dados/               Dados iniciais: grupos/categorias e versículos (fonte única para app e Apps Script)
+docs/API.md          Contrato da API
+PLANO.md             Fases, decisões técnicas, pendências e ideias para depois
+GUIA_DA_FAMILIA.md   Manual de 1 página para os integrantes
+GUIA_CAPTURA_SMS.md  Passo a passo iPhone/Android para captura de SMS
+```
+
+## Segurança e privacidade
+
+- A **chave do Claude** fica só nas Propriedades do script (nunca no app nem no Git).
+- Toda chamada exige o **token da família + token do usuário**; o perfil é validado **no servidor** (um Júnior não lê salários nem chamando a API direto).
+- **Nunca** guardamos número completo de cartão, CVV, senha ou códigos recebidos por SMS. Os SMS que não são de compra (códigos, propaganda) são descartados.
+- Tudo é **soft delete**: nada some de verdade da planilha. Há **log de auditoria** (aba `Log`) e **backup semanal** automático em `Backups/`.
+
+## Perguntas frequentes
+
+**O app funciona sem internet?** Sim para lançar: os lançamentos ficam numa fila no celular e sobem quando a conexão voltar.
+
+**Preciso pagar algo?** Não. Apps Script, Drive, GitHub Pages e Vercel têm planos gratuitos suficientes para uma família. A API do Claude é opcional e custa centavos por cupom lido.
+
+**Por que o iPhone não lê os SMS sozinho?** A Apple não permite que nenhum app leia SMS. Por isso usamos uma **automação do app Atalhos**, que encaminha a mensagem para a API (veja o guia).
+
+**Como atualizo o app?** Dê push na branch `main`; o GitHub Pages republica. O celular atualiza sozinho na próxima abertura.
+
+---
+
+Feito com carinho para a nossa casa. *Soli Deo Gloria.*

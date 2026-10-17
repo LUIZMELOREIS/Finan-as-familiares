@@ -1,0 +1,57 @@
+# Publica o app (pasta /app) no GitHub Pages a cada push na branch main.
+# Para ativar: no GitHub, Settings → Pages → Source: "GitHub Actions".
+# Segredos opcionais (Settings → Secrets and variables → Actions → Variables):
+#   VITE_API_URL       URL do App da Web do Apps Script
+#   VITE_TOKEN_FAMILIA token da família (aba Config da planilha)
+name: Publicar app no GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ['app/**', 'dados/**', '.github/workflows/publicar-app.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  construir:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - name: Construir
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_TOKEN_FAMILIA: ${{ vars.VITE_TOKEN_FAMILIA }}
+          VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_VERSAO: ${{ github.sha }}
+        run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/dist
+
+  publicar:
+    needs: construir
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,25 @@
+# Roda os testes e o build a cada push/PR, em qualquer branch.
+name: Testes
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  testar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+        working-directory: app
+      - run: npm test
+        working-directory: app
+      - run: npm run build
+        working-directory: app
+      - name: Testes do Apps Script (funções puras)
+        run: node apps-script/testes/executar.mjs
