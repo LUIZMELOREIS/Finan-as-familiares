@@ -548,7 +548,12 @@ function responderAssistente(b: Banco, uid: string, texto: string): MensagemAssi
     return resp('Não entendi o valor. Tente assim: “gastei 45 na padaria no pix”.')
   }
   // Gasto por categoria/grupo no mês
-  const cat = b.categorias.find((c) => c.tipo === 'despesa' && (t.includes(normalizar(c.nome)) || (c.palavras_chave || '').split(';').some((p) => p && t.includes(normalizar(p)))))
+  // Casa por palavra inteira, preferindo o nome mais longo ("delivery" antes de "gás" em "gastamos").
+  const temPalavra = (texto: string, termo: string) => !!termo && new RegExp(`(^|\\s)${termo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`).test(texto)
+  const cat = [...b.categorias]
+    .filter((c) => c.tipo === 'despesa')
+    .sort((a, c) => normalizar(c.nome).length - normalizar(a.nome).length)
+    .find((c) => temPalavra(t, normalizar(c.nome)) || (c.palavras_chave || '').split(';').some((p) => p.length >= 4 && temPalavra(t, normalizar(p))))
   if (cat && /QUANTO|GAST|TOTAL/.test(t)) {
     const atual = totalCat(cat.id, comp)
     const media = [1, 2, 3].reduce((s, k) => s + totalCat(cat.id, somarMeses(comp, -k)), 0) / 3
