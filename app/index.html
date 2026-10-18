@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="pt-BR" data-tema="escuro">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0" />
+    <meta name="theme-color" content="#0D0E23" />
+    <meta name="description" content="O app de finanças da nossa família: lance gastos por foto, voz ou digitação, acompanhe as contas da casa e os sonhos da família." />
+    <!-- iPhone: abre em tela cheia quando adicionado à Tela de Início -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Finanças" />
+    <link rel="apple-touch-icon" href="./icones/icone-192.png" />
+    <link rel="icon" type="image/svg+xml" href="./brasao.svg" />
+    <title>Finanças da Família</title>
+    <style>
+      /* Tela de abertura enquanto o JavaScript carrega */
+      html { background: #0D0E23; }
+      #root:empty::before { content: ''; display: flex; align-items: center; justify-content: center; height: 100dvh; font-size: 64px; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
