@@ -75,14 +75,11 @@ export function Casca() {
         )}
         <Filtros />
         <nav className="nav" aria-label="Seções">
+          {/* O NavLink marca o <a> ativo com aria-current="page", que o CSS usa. */}
           {itens.map((i) => (
-            <NavLink key={i.para} to={i.para} end={i.para === '/'} aria-current={undefined} className={({ isActive }) => (isActive ? 'ativo' : '')} {...{}}>
-              {({ isActive }) => (
-                <span aria-current={isActive ? 'page' : undefined} style={{ display: 'contents' }}>
-                  <Icone nome={i.icone} />{i.nome}
-                  {contador(i.contador) > 0 && <span className="badge num">{contador(i.contador)}</span>}
-                </span>
-              )}
+            <NavLink key={i.para} to={i.para} end={i.para === '/'}>
+              <Icone nome={i.icone} />{i.nome}
+              {contador(i.contador) > 0 && <span className="badge num">{contador(i.contador)}</span>}
             </NavLink>
           ))}
         </nav>
@@ -113,11 +110,11 @@ export function Casca() {
       </main>
 
       <nav className="bottom" aria-label="Seções">
-        <NavLink to="/" end>{({ isActive }) => <span aria-current={isActive ? 'page' : undefined} style={{ display: 'contents' }}><Icone nome="layout-grid" />Painel</span>}</NavLink>
-        <NavLink to={ehDependente ? '/caixa' : '/contas'}>{({ isActive }) => <span aria-current={isActive ? 'page' : undefined} style={{ display: 'contents' }}><Icone nome={ehDependente ? 'inbox' : 'calendar-clock'} />{ehDependente ? 'Caixa' : 'Contas'}</span>}</NavLink>
+        <NavLink to="/" end><Icone nome="layout-grid" />Painel</NavLink>
+        <NavLink to={ehDependente ? '/caixa' : '/contas'}><Icone nome={ehDependente ? 'inbox' : 'calendar-clock'} />{ehDependente ? 'Caixa' : 'Contas'}</NavLink>
         <button onClick={() => nav('/lancar')} aria-label="Lançar despesa" aria-current={loc.pathname.startsWith('/lancar') ? 'page' : undefined}><span className="plus"><Icone nome="plus" /></span></button>
-        <NavLink to="/projetos">{({ isActive }) => <span aria-current={isActive ? 'page' : undefined} style={{ display: 'contents' }}><Icone nome="target" />Projetos</span>}</NavLink>
-        <NavLink to="/assistente">{({ isActive }) => <span aria-current={isActive ? 'page' : undefined} style={{ display: 'contents' }}><Icone nome="message-square" />Assistente</span>}</NavLink>
+        <NavLink to="/projetos"><Icone nome="target" />Projetos</NavLink>
+        <NavLink to="/assistente"><Icone nome="message-square" />Assistente</NavLink>
       </nav>
       <Avisos />
     </div>
