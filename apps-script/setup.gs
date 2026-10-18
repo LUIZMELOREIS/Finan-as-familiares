@@ -64,7 +64,9 @@ function compartilharComLink(arquivo) {
 
 /** URL de visualização direta (serve como src de <img>). */
 function urlVisualizacao(id) {
-  return 'https://drive.google.com/uc?export=view&id=' + id;
+  // O endpoint "uc?export=view" deixou de servir imagens em <img>; este funciona para arquivos
+  // compartilhados com "qualquer pessoa com o link".
+  return 'https://lh3.googleusercontent.com/d/' + id;
 }
 
 /** URL de download direto. */
@@ -192,7 +194,8 @@ function migrarParaVersao2() {
     atualizarPorId('Grupos', g.id, {
       tipo_id: tipoId, nome: ini ? ini.nome : g.nome, cor: ini ? ini.cor : corDaPaleta(g.cor, 'slate'),
       grupo_analise: g.grupo_analise || (ini ? ini.grupo_analise : (tipoId === TIPO_RECEITAS ? 'Receitas' : tipoId === TIPO_PROJETOS ? 'Projetos' : 'Outros')),
-      ordem: ini ? ini.ordem : g.ordem, ativo: g.ativo === '' || g.ativo === undefined ? true : g.ativo,
+      // A v1 não tinha a coluna `ativo` em Grupos: a célula vazia é lida como false, então grupo sem tipo_id (v1) fica ativo.
+      ordem: ini ? ini.ordem : g.ordem, ativo: g.tipo_id ? !!g.ativo : true,
     });
     resumo.grupos++;
   });
@@ -259,7 +262,8 @@ function instalarGatilhos() {
 
 /** Hora (0-23) de um horário "HH:MM". */
 function horaDe(horario, padrao) {
-  return Math.min(23, Math.max(0, Number(String(horario || '').split(':')[0]) || padrao || 20));
+  const h = parseInt(String(horario || '').split(':')[0], 10); // "00:30" → 0 (e não o padrão)
+  return isNaN(h) ? (padrao === undefined ? 20 : padrao) : Math.min(23, Math.max(0, h));
 }
 
 /**

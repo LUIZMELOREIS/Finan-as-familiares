@@ -205,7 +205,7 @@ function objetoParaLinha(esquema, cabecalho, obj) {
 
 // ---------- Cache (memória + CacheService em pedaços) ----------
 
-const TAMANHO_PEDACO_CACHE = 90000; // CacheService aceita até 100 KB por chave
+const TAMANHO_PEDACO_CACHE = 45000; // CacheService aceita até 100 KB (em bytes) por chave; acentos ocupam 2 bytes
 const SEGUNDOS_CACHE = 600;
 
 function chaveCache(nome) { return 'aba_' + nome + '_' + propriedade('ID_PLANILHA').slice(0, 8); }

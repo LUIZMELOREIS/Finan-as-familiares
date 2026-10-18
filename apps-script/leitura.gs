@@ -120,12 +120,16 @@ function promptLeitura(tipo, contasFixas, cardapio) {
 /** Extrai texto de imagem/PDF convertendo para Google Docs com OCR (precisa do serviço avançado Drive). */
 function ocrDrive(blob) {
   if (typeof Drive === 'undefined' || !Drive.Files) throw new Error('Serviço avançado Drive não ativado (OCR indisponível)');
-  const recurso = { title: 'ocr_temp_' + Date.now(), mimeType: 'application/vnd.google-apps.document' };
-  const arquivo = Drive.Files.insert(recurso, blob, { ocr: true, ocrLanguage: 'pt' });
+  const nome = 'ocr_temp_' + Date.now();
+  const mimeDoc = 'application/vnd.google-apps.document';
+  // appsscript.json pede a v2 (Files.insert + ocr:true). Se o serviço for ativado como v3 no editor, usa Files.create.
+  const arquivo = Drive.Files.insert
+    ? Drive.Files.insert({ title: nome, mimeType: mimeDoc }, blob, { ocr: true, ocrLanguage: 'pt' })
+    : Drive.Files.create({ name: nome, mimeType: mimeDoc }, blob, { ocrLanguage: 'pt' });
   try {
     return DocumentApp.openById(arquivo.id).getBody().getText();
   } finally {
-    try { Drive.Files.remove(arquivo.id); } catch (e) { DriveApp.getFileById(arquivo.id).setTrashed(true); }
+    try { Drive.Files.remove(arquivo.id); } catch (e) { try { DriveApp.getFileById(arquivo.id).setTrashed(true); } catch (e2) { /* ignora */ } }
   }
 }
 

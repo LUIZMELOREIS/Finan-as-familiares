@@ -139,12 +139,14 @@ function extrairParametros(e, metodo) {
   const params = Object.assign({}, e.parameter || {});
   if (metodo === 'POST' && e.postData && e.postData.contents) {
     const texto = String(e.postData.contents).trim();
-    if (texto) {
-      try {
-        Object.assign(params, JSON.parse(texto));
-      } catch (erro) {
-        throw new ErroUsuario('Não entendi o pedido (o corpo não é um JSON válido).');
-      }
+    // O app envia JSON como text/plain. Um corpo de formulário (application/x-www-form-urlencoded, usado por
+    // alguns apps de automação no webhook) já chega desmontado em e.parameter e não deve passar pelo JSON.parse.
+    if (texto && (texto.charAt(0) === '{' || texto.charAt(0) === '[')) {
+      let corpo;
+      try { corpo = JSON.parse(texto); } catch (erro) { throw new ErroUsuario('Não entendi o pedido (o corpo não é um JSON válido).'); }
+      if (corpo && typeof corpo === 'object' && !Array.isArray(corpo)) Object.assign(params, corpo);
+    } else if (texto && !Object.keys(params).length) {
+      throw new ErroUsuario('Não entendi o pedido (o corpo não é um JSON válido).');
     }
   }
   return params;

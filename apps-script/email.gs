@@ -24,6 +24,18 @@ function obterMarcador(nome) {
   return GmailApp.getUserLabelByName(nome) || GmailApp.createLabel(nome);
 }
 
+/**
+ * Conversas com o marcador que ainda não receberam "Processado". Usa o próprio marcador (getThreads) em vez
+ * de GmailApp.search('label:"..."'), porque a busca não aceita nomes de marcador com espaço/acento entre aspas.
+ * As conversas vêm da mais recente para a mais antiga, então as novas estão sempre no começo.
+ */
+function threadsNaoProcessadas(marcador, processado) {
+  const nomeProcessado = processado.getName();
+  return marcador.getThreads(0, MAX_THREADS_POR_VEZ * 5)
+    .filter((t) => !t.getLabels().some((l) => l.getName() === nomeProcessado))
+    .slice(0, MAX_THREADS_POR_VEZ);
+}
+
 /** Processa as duas filas de e-mail. Devolve { contas, alertas }. */
 function processarEmails() {
   const processado = obterMarcador(MARCADOR_PROCESSADO);
@@ -31,13 +43,13 @@ function processarEmails() {
   obterMarcador(MARCADOR_ALERTAS);
   const resultado = { contas: 0, alertas: 0, erros: 0 };
 
-  const contas = GmailApp.search('label:"' + MARCADOR_CONTAS + '" -label:"' + MARCADOR_PROCESSADO + '"', 0, MAX_THREADS_POR_VEZ);
+  const contas = threadsNaoProcessadas(obterMarcador(MARCADOR_CONTAS), processado);
   contas.forEach((thread) => {
     try { resultado.contas += processarThreadConta(thread); } catch (e) { resultado.erros++; console.error('Conta por e-mail: ' + e.message); }
     thread.addLabel(processado);
   });
 
-  const alertas = GmailApp.search('label:"' + MARCADOR_ALERTAS + '" -label:"' + MARCADOR_PROCESSADO + '"', 0, MAX_THREADS_POR_VEZ);
+  const alertas = threadsNaoProcessadas(obterMarcador(MARCADOR_ALERTAS), processado);
   alertas.forEach((thread) => {
     try { resultado.alertas += processarThreadAlerta(thread); } catch (e) { resultado.erros++; console.error('Alerta por e-mail: ' + e.message); }
     thread.addLabel(processado);

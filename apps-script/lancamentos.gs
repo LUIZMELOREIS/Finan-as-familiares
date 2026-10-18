@@ -118,7 +118,7 @@ function calcularResumoMes(d, visao, comp, filtroUsuario) {
     r.por_categoria[o.categoria_id] = { realizado: 0, orcado: o.valor_planejado };
     if (c) {
       garantirGrupo(c.grupo_id); garantirTipo(c.tipo_id);
-      r.por_grupo[c.grupo_id].orcado += o.valor_planejado;
+      if (c.grupo_id) r.por_grupo[c.grupo_id].orcado += o.valor_planejado;
       if (c.tipo_id) r.por_tipo[c.tipo_id].orcado += o.valor_planejado;
     }
   });
@@ -136,7 +136,7 @@ function calcularResumoMes(d, visao, comp, filtroUsuario) {
     else if (ehDespesaReal(c)) r.saiu += l.valor;
     garantirTipo(c.tipo_id); garantirGrupo(c.grupo_id);
     if (c.tipo_id) r.por_tipo[c.tipo_id].realizado += l.valor;
-    r.por_grupo[c.grupo_id].realizado += l.valor;
+    if (c.grupo_id) r.por_grupo[c.grupo_id].realizado += l.valor; // categoria sem grupo (planilha editada à mão) não derruba o resumo
     r.por_categoria[c.id] = r.por_categoria[c.id] || { realizado: 0, orcado: 0 };
     r.por_categoria[c.id].realizado += l.valor;
     if (ehDespesaReal(c)) r.por_usuario[l.usuario_id] = (r.por_usuario[l.usuario_id] || 0) + l.valor;
@@ -533,7 +533,7 @@ function acaoExportar(p) {
   const pasta = pastaPorCaminho('Backups/Exportações');
   let arquivo;
   if (formato === 'csv') {
-    const csv = '﻿' + linhas.map((ln) => ln.map((c) => {
+    const csv = '\uFEFF' + linhas.map((ln) => ln.map((c) => {
       if (typeof c === 'number') return c.toFixed(2).replace('.', ',');
       const s = String(c === null || c === undefined ? '' : c);
       return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;

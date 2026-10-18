@@ -544,5 +544,39 @@ teste('cardapioParaPrompt lista id, nome, grupo e ícone sem itens ocultos', () 
   assert.match(t, /- c_mercado: Supermercado \(Alimentação, shopping-cart\)/); assert.ok(!t.includes('c_aporte_projeto'))
 })
 
+console.log('19) Primeira execução no Google: parâmetros HTTP, gatilhos, migração e resumo')
+teste('extrairParametros: JSON em text/plain junta com a URL', () => {
+  const p = g.extrairParametros({ parameter: { webhook: '1' }, postData: { type: 'text/plain', contents: ' {"acao":"ping","token":"t"} ' } }, 'POST')
+  assert.equal(p.webhook, '1'); assert.equal(p.acao, 'ping'); assert.equal(p.token, 't')
+})
+teste('extrairParametros: corpo de formulário (x-www-form-urlencoded) usa e.parameter sem erro', () => {
+  const p = g.extrairParametros({ parameter: { webhook: '1', texto: 'Compra aprovada', token: 'x' }, postData: { type: 'application/x-www-form-urlencoded', contents: 'webhook=1&texto=Compra+aprovada&token=x' } }, 'POST')
+  assert.equal(p.texto, 'Compra aprovada'); assert.equal(p.webhook, '1')
+})
+teste('extrairParametros: JSON quebrado ou corpo sem sentido dá ErroUsuario em português', () => {
+  const ErroUsuario = vm.runInContext('ErroUsuario', ctx) // class é lexical: não vira propriedade do contexto
+  assert.throws(() => g.extrairParametros({ parameter: {}, postData: { contents: '{"acao":' } }, 'POST'), (e) => e instanceof ErroUsuario && /JSON/.test(e.message))
+  assert.throws(() => g.extrairParametros({ parameter: {}, postData: { contents: 'lixo' } }, 'POST'), (e) => e instanceof ErroUsuario)
+  assert.equal(g.extrairParametros({ parameter: { acao: 'ping' } }, 'GET').acao, 'ping')
+})
+teste('horaDe: "00:30" é meia-noite, não o padrão', () => { assert.equal(g.horaDe('00:30'), 0); assert.equal(g.horaDe('20:00'), 20); assert.equal(g.horaDe(''), 20); assert.equal(g.horaDe('abc', 7), 7); assert.equal(g.horaDe('25:00'), 23) })
+teste('calcularResumoMes não derruba com categoria sem grupo_id', () => {
+  const d = bancoTeste()
+  d.categorias = d.categorias.map((c) => (c.id === 'c_delivery' ? { ...c, grupo_id: '' } : c))
+  d.orcamento.push({ competencia: comp, categoria_id: 'c_delivery', valor_planejado: 100 })
+  const r = g.calcularResumoMes(d, visaoAdmin, comp)
+  assert.ok(r.saiu > 0); assert.equal(r.por_categoria.c_delivery.realizado, 300); assert.equal(r.por_grupo[''], undefined)
+})
+teste('normalizar remove acentos combinados (classe \\u0300-\\u036f)', () => { assert.equal(g.normalizar('São João — Açúcar'), 'SAO JOAO ACUCAR'); assert.equal(g.hashDedup(10, '2026-01-02', '', 'São João'), g.hashDedup(10, '2026-01-02', '', 'SAO JOAO')) })
+teste('threadsNaoProcessadas filtra pelo marcador "Processado" sem usar GmailApp.search', () => {
+  const rot = (nome) => ({ getName: () => nome })
+  const thread = (labels) => ({ getLabels: () => labels.map(rot) })
+  const t1 = thread(['Contas da Casa']), t2 = thread(['Contas da Casa', 'Processado']), t3 = thread([])
+  const marcador = { getThreads: (ini, max) => { assert.equal(ini, 0); assert.ok(max >= 20); return [t1, t2, t3] } }
+  assert.deepEqual(g.threadsNaoProcessadas(marcador, rot('Processado')), [t1, t3])
+})
+teste('TAMANHO_PEDACO_CACHE cabe em 100 KB mesmo com acentos (2 bytes por caractere)', () => assert.ok(vm.runInContext('TAMANHO_PEDACO_CACHE', ctx) * 2 <= 100 * 1024))
+teste('CSV de exportação começa com BOM escapado (\\uFEFF)', () => assert.ok(fs.readFileSync(path.join(raiz, 'lancamentos.gs'), 'utf8').includes("'\\uFEFF' +")))
+
 console.log(`\n${total - falhas}/${total} testes passaram${falhas ? ` — ${falhas} FALHA(S)` : ''}`)
 process.exit(falhas ? 1 : 0)
