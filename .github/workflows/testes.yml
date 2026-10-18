@@ -23,3 +23,5 @@ jobs:
         working-directory: app
       - name: Testes do Apps Script (funções puras)
         run: node apps-script/testes/executar.mjs
+      - name: Arquivo único do Apps Script está atualizado
+        run: node apps-script/testes/empacotar.mjs && git diff --exit-code --ignore-matching-lines='Gerado em' apps-script/dist/

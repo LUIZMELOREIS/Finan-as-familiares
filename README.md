@@ -41,9 +41,9 @@ Você vai precisar apenas de uma **conta Google** (Gmail). Não precisa de cart�
 
 1. Entre em **[script.google.com](https://script.google.com)** com a sua conta Google.
 2. Clique em **"Novo projeto"**. Dê o nome **"Finanças da Família"** (clique em "Projeto sem título" no topo para renomear).
-3. Na barra lateral esquerda, ao lado de **"Arquivos"**, clique no **"+"** → **"Script"** e crie um arquivo para **cada** arquivo `.gs` da pasta [`apps-script/`](apps-script) deste repositório, com o **mesmo nome** (ex.: `setup`, `api`, `bd`, …). Em cada um, apague o conteúdo e **cole o conteúdo do arquivo correspondente**.
-   - Dica: o arquivo `Código.gs` que já vem no projeto pode receber o conteúdo de `api.gs`.
-   - Se preferir fazer isso com um comando só, veja ["Publicar com o clasp"](apps-script/README.md#publicar-com-o-clasp) no README da pasta.
+3. Abra o arquivo `Código.gs` que já vem no projeto, apague o conteúdo e **cole o conteúdo inteiro de [`apps-script/dist/FinancasDaFamilia.gs`](apps-script/dist/FinancasDaFamilia.gs)** (é um arquivo único com todo o back-end; no GitHub, clique em "Raw", selecione tudo e copie).
+   - Alternativa para quem usa terminal: ["Publicar com o clasp"](apps-script/README.md#publicar-com-o-clasp) envia os 17 arquivos separados com um comando.
+   - Para atualizar no futuro, basta colar o arquivo novo por cima e criar uma nova versão da implantação (Parte 2, nota ao fim).
 4. Clique na **engrenagem ⚙️ "Configurações do projeto"** (barra lateral):
    - Marque **"Mostrar o arquivo de manifesto appsscript.json no editor"** e cole nele o conteúdo de `apps-script/appsscript.json`.
    - Em **"Propriedades do script"** → "Adicionar propriedade do script", crie:

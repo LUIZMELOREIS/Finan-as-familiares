@@ -47,6 +47,10 @@ Tudo está em português e comentado. Você não precisa saber programar para in
 3. Clique na engrenagem **Configurações do projeto** e marque **Mostrar o arquivo de manifesto "appsscript.json" no editor**.
 4. Para cada arquivo desta pasta (`*.gs` e `appsscript.json`): no editor, **+ → Script**, dê o mesmo nome (sem a extensão) e cole o conteúdo. No `appsscript.json`, substitua tudo pelo conteúdo do arquivo daqui.
 
+**Opção A2 — um arquivo só (a mais fácil)**
+
+Em vez de criar 17 arquivos, abra `Código.gs` e cole o conteúdo de `dist/FinancasDaFamilia.gs` (todos os `.gs` concatenados; gerado por `node testes/empacotar.mjs`). O `appsscript.json` continua indo no manifesto. O resultado é idêntico, porque o Apps Script compartilha o escopo global entre arquivos.
+
 **Opção B — com o `clasp` (para quem usa terminal)**
 
 ```bash
