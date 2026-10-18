@@ -11,16 +11,18 @@ import { hojeIso, normalizar } from './formato'
 /** Sugere até 6 categorias para um texto, pelas palavras-chave (e pelo nome da categoria). */
 export function sugerirCategoria(texto: string, categorias: Categoria[], tipo: 'despesa' | 'receita' = 'despesa'): string[] {
   const t = normalizar(texto)
+  // Termos curtos (até 4 letras) só casam palavra inteira: "GAS" não pode casar em "GASTEI".
+  const contem = (termo: string) => (termo.length >= 5 ? t.includes(termo) : new RegExp(`(^|\\s)${termo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`).test(t))
   const pontuadas: Array<{ id: string; pontos: number }> = []
   for (const c of categorias) {
     if (c.tipo !== tipo || c.ativa === false) continue
     let pontos = 0
     for (const pc of (c.palavras_chave || '').split(';').map((s) => normalizar(s)).filter(Boolean)) {
-      if (t.includes(pc)) pontos += pc.length >= 5 ? 3 : 2
+      if (contem(pc)) pontos += pc.length >= 5 ? 3 : 2
     }
-    if (t.includes(normalizar(c.nome))) pontos += 2
+    if (contem(normalizar(c.nome))) pontos += 2
     const primeiraPalavra = normalizar(c.nome).split(' ')[0]
-    if (primeiraPalavra.length > 3 && t.includes(primeiraPalavra)) pontos += 1
+    if (primeiraPalavra.length > 3 && contem(primeiraPalavra)) pontos += 1
     if (pontos) pontuadas.push({ id: c.id, pontos })
   }
   pontuadas.sort((a, b) => b.pontos - a.pontos)
@@ -101,7 +103,7 @@ export function extrairData(texto: string): string {
 /** Padrões de SMS/alerta por banco. Fácil de ampliar: basta acrescentar uma linha. */
 export const PADROES_BANCO: Array<{ banco: string; regex: RegExp; grupos: { valor: number; estabelecimento: number; final?: number; parcelas?: number } }> = [
   // Itaú: "Compra aprovada no seu Itaú final 4321: R$ 87,40 em PADARIA PAO QUENTE em 17/10 às 08:12"
-  { banco: 'Itaú', regex: /ITAU.*?final\s*(\d{4}).*?R\$\s*([\d.]+,\d{2})\s*(?:em|no|na)\s+(.+?)(?:\s+em\s+\d{1,2}\/\d{1,2}|\s+as\s+\d|,|\.|$)/i, grupos: { final: 1, valor: 2, estabelecimento: 3 } },
+  { banco: 'Itaú', regex: /ITA[UÚ].*?final\s*(\d{4}).*?R\$\s*([\d.]+,\d{2})\s*(?:em|no|na)\s+(.+?)(?:\s+em\s+\d{1,2}\/\d{1,2}|\s+[aà]s\s+\d|,|\.|$)/i, grupos: { final: 1, valor: 2, estabelecimento: 3 } },
   // Nubank: "Compra de R$ 156,90 APROVADA em DROGARIA NISSEI com o cartão final 8765"
   { banco: 'Nubank', regex: /Compra\s+de\s+R\$\s*([\d.]+,\d{2})\s+APROVADA\s+em\s+(.+?)\s+(?:com|no)\b.*?final\s*(\d{4})/i, grupos: { valor: 1, estabelecimento: 2, final: 3 } },
   // Bradesco: "BRADESCO CARTOES: COMPRA APROVADA NO CARTAO FINAL 1234 EM 17/10 10:00 NO VALOR DE R$ 50,00 EM MERCADO X"

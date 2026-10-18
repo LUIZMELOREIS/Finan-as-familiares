@@ -10,7 +10,8 @@
     "test": "vitest run",
     "lint": "oxlint",
     "icones": "node scripts/gerar-icones.mjs",
-    "capturas": "node scripts/capturas.mjs"
+    "capturas": "node scripts/capturas.mjs",
+    "e2e": "node scripts/e2e-demo.mjs"
   },
   "dependencies": {
     "idb-keyval": "^6.3.0",

@@ -284,7 +284,7 @@ svg.chart { width: 100%; height: auto; display: block; }
 /* ---------- utilidades ---------- */
 .rolagem-escondida { scrollbar-width: none; }
 .rolagem-escondida::-webkit-scrollbar { display: none; }
-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.sr-only, .field .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .avatar { border-radius: 50%; display: grid; place-items: center; font-weight: 600; color: #fff; flex: none; overflow: hidden; background: var(--indigo); }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
 .divisor { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
@@ -294,7 +294,7 @@ svg.chart { width: 100%; height: auto; display: block; }
 @media (max-width: 1180px) {
   .dash { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .groups { grid-template-columns: repeat(2, 1fr); }
-  .assist, .entry { grid-template-columns: 1fr; }
+  .assist, .entry { grid-template-columns: minmax(0, 1fr); }
   .projects { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 760px) {

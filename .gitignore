@@ -17,3 +17,4 @@ apps-script/.clasprc.json
 # Sistema
 .DS_Store
 *.log
+app/e2e-saida/

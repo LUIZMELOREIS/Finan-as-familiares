@@ -40,9 +40,10 @@ export function Convite({ convite, aoEntrar, aoCancelar }: { convite: DadosConvi
     } catch { setErro('Não foi possível ler a foto.') }
   }
 
-  const confirmar = async () => {
-    if (pin2.length < 4) return
-    if (pin !== pin2) { setErro('Os PINs não conferem. Tente de novo.'); setPin(''); setPin2(''); setPasso('pin'); return }
+  // Recebe o valor digitado: o estado `pin2` ainda não foi atualizado quando o 4º dígito dispara a confirmação.
+  const confirmar = async (confirmacao = pin2) => {
+    if (confirmacao.length < 4) return
+    if (pin !== confirmacao) { setErro('Os PINs não conferem. Tente de novo.'); setPin(''); setPin2(''); setPasso('pin'); return }
     setEnviando(true); setErro('')
     const sessaoBase: Sessao = { url_api: convite.url_api, token_familia: convite.token_familia, token: '', usuario_id: '' }
     try {
@@ -122,7 +123,7 @@ export function Convite({ convite, aoEntrar, aoCancelar }: { convite: DadosConvi
       {passo === 'confirmar' && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
           <p className="sub" style={{ margin: 0 }}>Digite o mesmo PIN mais uma vez.</p>
-          <TecladoPin valor={pin2} aoMudar={(v) => { setPin2(v); setErro(''); if (v.length === 4) setTimeout(() => confirmar(), 100) }} desabilitado={enviando} rotulo="Confirmação do PIN" />
+          <TecladoPin valor={pin2} aoMudar={(v) => { setPin2(v); setErro(''); if (v.length === 4) setTimeout(() => confirmar(v), 100) }} desabilitado={enviando} rotulo="Confirmação do PIN" />
           {enviando && <p className="sub" style={{ margin: 0 }}>Entrando…</p>}
         </div>
       )}

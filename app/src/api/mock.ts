@@ -809,7 +809,8 @@ export async function chamarMock(corpo: Record<string, unknown>): Promise<Respos
         const existentes = ativos(b.lancamentos)
         const cartao = b.cartoes.find((k) => k.id === p.cartao_id)
         const linhas = String(p.texto || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-        const compras = (linhas.length ? linhas.map((ln) => { const [data, est, val] = ln.split(/[;,\t]/); return { data: data?.includes('/') ? data.split('/').reverse().join('-') : data, estabelecimento: est || '', valor: Number(String(val).replace(',', '.')) || 0 } }) : [
+        // CSV brasileiro: separador ";" (ou tabulação) e vírgula decimal; só usa a vírgula como separador quando não há outro.
+        const compras = (linhas.length ? linhas.map((ln) => { const sep = ln.includes(';') ? ';' : ln.includes('\t') ? '\t' : ','; const [data, est, val] = ln.split(sep).map((s) => s.trim()); return { data: data?.includes('/') ? data.split('/').reverse().join('-') : data, estabelecimento: est || '', valor: Number(String(val ?? '').replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) || 0 } }) : [
           { data: hojeIso(), estabelecimento: 'SUPERMERCADO CONDOR', valor: 312.5 }, { data: hojeIso(), estabelecimento: 'NETFLIX.COM', valor: 55.9 }, { data: competenciaDe() + '-03', estabelecimento: 'CLARO', valor: 189 },
         ]).map((c) => {
           const d = new Date(c.data).getTime()

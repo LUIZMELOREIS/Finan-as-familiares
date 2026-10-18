@@ -71,8 +71,10 @@ export default function Lancar() {
 
   function mudarModo(m: Modo) {
     setModo(m)
+    // Depois de "Lançado", trocar de método começa um lançamento novo (sem herdar valor, cartão e parcelas).
+    if (pronto) { setRascunho(rascunhoVazio(usuario.id, origemDe(m))); setSugestao(undefined); setLido(false) }
+    else if (!editando) mudar({ origem: origemDe(m) })
     setPronto(null)
-    if (!editando) mudar({ origem: origemDe(m) })
   }
 
   /** Aplica uma leitura (cupom, NFC-e, voz) e marca a sugestão no cardápio. */

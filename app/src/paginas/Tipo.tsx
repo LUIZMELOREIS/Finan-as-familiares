@@ -63,6 +63,18 @@ function TelaTipo({ id }: { id: string }) {
 
   useEffect(() => { setLancs({}); if (expandida) carregarLancs(expandida) }, [competencia, filtroUsuario, versao]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // `?categoria=` mudou com a tela já aberta (outro aviso ou link): abre a nova categoria.
+  const categoriaParam = useRef(sp.get('categoria'))
+  useEffect(() => {
+    const alvo = sp.get('categoria')
+    if (alvo === categoriaParam.current) return
+    categoriaParam.current = alvo
+    if (!alvo) return
+    setExpandida(alvo)
+    carregarLancs(alvo)
+    rolou.current = false
+  }, [sp, carregarLancs])
+
   const alternar = (catId: string) => {
     if (expandida === catId) { setExpandida(null); return }
     setExpandida(catId)
