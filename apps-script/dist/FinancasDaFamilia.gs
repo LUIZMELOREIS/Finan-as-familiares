@@ -2,7 +2,7 @@
  * Finanças da Família — back-end Google Apps Script (arquivo único).
  * Gerado por apps-script/testes/empacotar.mjs a partir dos arquivos em apps-script/*.gs.
  * Cole este arquivo inteiro no Código.gs do seu projeto e o appsscript.json no manifesto.
- * Gerado em 2026-10-18.
+ * Gerado em 2026-10-19.
  */
 
 // ==============================================================================
@@ -326,7 +326,7 @@ function acaoPing(p) {
  *
  * Script Properties usadas (Configurações do projeto → Propriedades do script):
  *  - SOBRENOME (opcional): nome da família. Padrão: SOBRENOME_PADRAO abaixo.
- *  - URL_APP: endereço do app publicado (para montar o link de convite).
+ *  - URL_APP (opcional): endereço do app publicado (para montar o link de convite). Padrão: URL_APP_PADRAO.
  *  - CHAVE_API_CLAUDE / MODELO_CLAUDE: leitura inteligente e assistente (opcional).
  *  - TOKEN_TELEGRAM: token do bot (opcional; ver telegram.gs).
  *  - URL_SERVICO_PUSH / TOKEN_SERVICO_PUSH: notificações push (opcional).
@@ -336,6 +336,13 @@ function acaoPing(p) {
 
 /** Sobrenome padrão da família (pode editar aqui ou definir SOBRENOME nas Script Properties). */
 const SOBRENOME_PADRAO = 'Melo Reis';
+
+/** Endereço padrão do app publicado (GitHub Pages deste repositório). Pode sobrescrever com URL_APP nas Script Properties. */
+const URL_APP_PADRAO = 'https://luizmeloreis.github.io/Finan-as-familiares/';
+
+function obterUrlApp() {
+  return propriedade('URL_APP', URL_APP_PADRAO);
+}
 
 /** Subpastas criadas dentro de "Finanças da Família <Sobrenome>". */
 const SUBPASTAS = ['Cupons e Recibos', 'Contas da Casa', 'Contas da Casa/_Entrada', 'Faturas de Cartão', 'Projetos e Sonhos', 'Identidade da Família', 'Backups'];
@@ -459,10 +466,50 @@ function instalar() {
     planilha: planilha.getUrl(),
     token_familia: cfg.token_familia,
     migracao,
-    proximo_passo: 'Implantar → Nova implantação → App da Web (Executar como: Eu; Acesso: Qualquer pessoa). Depois defina URL_APP e, se quiser, CHAVE_API_CLAUDE e TOKEN_TELEGRAM nas Propriedades do script (para o Telegram, rode configurarTelegram()).',
+    proximo_passo: 'Implantar → Nova implantação → App da Web (Executar como: Eu; Acesso: Qualquer pessoa) → Implantar. ' +
+      'Depois volte aqui, escolha a função linkDeAcesso e clique em Executar: o registro mostra o link para abrir no celular. ' +
+      'Opcional: CHAVE_API_CLAUDE e TOKEN_TELEGRAM nas Propriedades do script (para o Telegram, rode configurarTelegram()).',
   };
   console.log('Instalação concluída.\n' + (avisoPin ? avisoPin + '\n' : '') + JSON.stringify(resumo, null, 2));
   return resumo;
+}
+
+/**
+ * linkDeAcesso — Rode DEPOIS de implantar como App da Web (e depois de instalar()).
+ * Cria um convite de Administrador e imprime no registro de execução um link pronto para
+ * abrir no celular: ele já leva a URL da API, o token da família e o código do convite,
+ * então não é preciso digitar nada nem mexer em Propriedades do script.
+ *
+ * Na primeira vez, o convite fica ligado ao usuário "Administrador" criado por instalar():
+ * quem abrir o link escolhe nome, foto e PIN e passa a ser esse administrador.
+ * Nas vezes seguintes, cria um convite de Administrador novo (para outro adulto da família).
+ */
+function linkDeAcesso() {
+  const cfg = lerConfigCompleta();
+  if (!cfg.token_familia) throw new Error('Rode instalar() primeiro.');
+  const api = urlDoAppWeb();
+  const usuarios = lerAba('Usuarios');
+  const adminInicial = usuarios.find((u) => u.perfil === 'Administrador' && u.origem === 'instalacao' && u.apelido === 'Administrador');
+  const convite = criarConvite('Administrador', adminInicial ? adminInicial.id : 'instalacao', adminInicial ? adminInicial.id : '');
+  const link = montarLinkConvite(convite.codigo, 'Administrador', api, cfg.token_familia);
+  const linhas = [];
+  if (!api) {
+    linhas.push('O App da Web ainda não foi implantado. Faça: Implantar → Nova implantação → App da Web (Executar como: Eu; Acesso: Qualquer pessoa) → Implantar. Depois rode linkDeAcesso() de novo.');
+    linhas.push('Enquanto isso, estes dados servem para "Já tenho a URL da API" no app:');
+  } else {
+    linhas.push('ABRA ESTE LINK NO NAVEGADOR DO CELULAR (vale por ' + DIAS_VALIDADE_CONVITE + ' dias, uma única vez):');
+    linhas.push(link);
+    linhas.push('');
+    linhas.push('No celular: Compartilhar → "Adicionar à Tela de Início" (iPhone) ou menu ⋮ → "Instalar app" (Android); depois escolha nome, foto e PIN.');
+    if (/\/dev$/.test(api)) linhas.push('Atenção: a URL da API terminou em /dev. Use a URL que termina em /exec (Implantar → Gerenciar implantações) no lugar dela.');
+    linhas.push('');
+    linhas.push('Se preferir digitar no app ("Já tenho a URL da API"):');
+  }
+  linhas.push('  URL da API: ' + (api || '(implante primeiro)'));
+  linhas.push('  Token da família: ' + cfg.token_familia);
+  linhas.push('  Código do convite: ' + convite.codigo + ' (perfil Administrador)');
+  console.log(linhas.join('\n'));
+  return { link, url_api: api, token_familia: cfg.token_familia, codigo_convite: convite.codigo, expira_em: convite.expira_em };
 }
 
 // ---------- Migração da versão 1 ----------
@@ -2291,17 +2338,26 @@ function limparConvitesVencidos() {
  */
 function acaoGerarConvite(p, ctx) {
   const perfil = PERFIS_VALIDOS.indexOf(normalizarPerfil(p.perfil)) >= 0 ? normalizarPerfil(p.perfil) : 'Adulto';
+  const convite = criarConvite(perfil, ctx.uid, p.usuario_id_convidado || '');
+  const cfg = lerConfigCompleta();
+  const url = montarLinkConvite(convite.codigo, perfil, urlDoAppWeb(), cfg.token_familia || '');
+  return { codigo_convite: convite.codigo, url, expira_em: convite.expira_em };
+}
+
+/** Cria e grava um convite (código de 6 caracteres, validade DIAS_VALIDADE_CONVITE). usuarioId liga o convite a um usuário já existente. */
+function criarConvite(perfil, criadoPor, usuarioId) {
   limparConvitesVencidos();
   const codigo = gerarCodigoConvite();
   const expira = new Date(Date.now() + DIAS_VALIDADE_CONVITE * 86400000);
-  const convite = { codigo, perfil, expira_em: expira.toISOString(), criado_por: ctx.uid, usuario_id: p.usuario_id_convidado || '' };
+  const convite = { codigo, perfil, expira_em: expira.toISOString(), criado_por: criadoPor || '', usuario_id: usuarioId || '' };
   definirPropriedade(chaveConvite(codigo), JSON.stringify(convite));
-  const cfg = lerConfigCompleta();
-  const base = propriedade('URL_APP', '');
-  const api = urlDoAppWeb();
-  const url = base + '#/entrar?convite=' + codigo + '&perfil=' + encodeURIComponent(perfil) +
-    '&api=' + encodeURIComponent(api) + '&familia=' + encodeURIComponent(cfg.token_familia || '');
-  return { codigo_convite: codigo, url, expira_em: convite.expira_em };
+  return convite;
+}
+
+/** Link que o convidado abre no celular: app publicado + convite + URL da API + token da família. */
+function montarLinkConvite(codigo, perfil, urlApi, tokenFamilia) {
+  return obterUrlApp() + '#/entrar?convite=' + codigo + '&perfil=' + encodeURIComponent(perfil) +
+    '&api=' + encodeURIComponent(urlApi || '') + '&familia=' + encodeURIComponent(tokenFamilia || '');
 }
 
 /** URL pública deste App da Web (vazia se ainda não foi implantado). */
@@ -4478,7 +4534,7 @@ function lembreteDiario() {
   try { lerAba('Telegram').filter((r) => r.ativo && r.chat_id).forEach((r) => enviarTelegram(r.usuario_id, TEXTO_LEMBRETE)); } catch (e) { console.warn('telegram: ' + e.message); }
   if (!enviado) {
     enviarEmailAdministradores(TEXTO_LEMBRETE, '<p>' + TEXTO_LEMBRETE + '</p><p>Abra o app e registre os gastos do dia. ' +
-      (propriedade('URL_APP', '') ? '<a href="' + propriedade('URL_APP') + '">Abrir o app</a>' : '') + '</p>' +
+      '<a href="' + obterUrlApp() + '">Abrir o app</a></p>' +
       '<p><small>Para receber este lembrete como notificação no celular, configure o serviço de push (URL_SERVICO_PUSH). Veja o README.</small></p>');
   }
   return enviado;

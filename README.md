@@ -33,9 +33,25 @@ Para ver em tamanho de celular no computador: pressione `F12` → ícone de celu
 
 ---
 
-## Instalação completa (para leigos) — cerca de 30 minutos
+## Instalação curta — 3 passos, uns 10 minutos
 
-Você vai precisar apenas de uma **conta Google** (Gmail). Não precisa de cartão de crédito nem de servidor.
+Você precisa só de uma **conta Google** (Gmail). O app já está publicado em **https://luizmeloreis.github.io/Finan-as-familiares/**; falta criar o "cérebro" (planilha + API) dentro da sua conta Google. Não precisa de cartão de crédito, servidor, Propriedades do script nem variáveis no GitHub.
+
+**Passo 1 — Colar o código.** Abra [script.google.com/home/projects/create](https://script.google.com/home/projects/create) (já entra num projeto novo). Apague o que está em `Código.gs` e cole o conteúdo inteiro deste arquivo: [FinancasDaFamilia.gs — versão para copiar](https://raw.githubusercontent.com/LUIZMELOREIS/Finan-as-familiares/main/apps-script/dist/FinancasDaFamilia.gs). (Abra o link, `Ctrl+A`, `Ctrl+C`; no editor, `Ctrl+V`, depois `Ctrl+S`.) Se quiser, renomeie o projeto para "Finanças da Família" clicando em "Projeto sem título".
+
+**Passo 2 — Instalar.** Na barra acima do código, na lista de funções ao lado de "Depurar", escolha **`instalar`** e clique em **▶ Executar**. O Google pede autorização: **Revisar permissões → sua conta → Avançado → Acessar Finanças da Família (não seguro) → Permitir** (é "não seguro" só porque o app é seu, não foi publicado na loja do Google). Espere o registro embaixo dizer **"Instalação concluída"**: a pasta e a planilha foram criadas no seu Drive.
+
+**Passo 3 — Publicar e pegar o link.** Clique em **Implantar → Nova implantação → ⚙️ → App da Web**. Preencha **Executar como: Eu** e **Quem pode acessar: Qualquer pessoa** → **Implantar** (autorize de novo se pedir) → **Concluído**. Volte ao editor, escolha a função **`linkDeAcesso`** e clique em **▶ Executar**. O registro mostra um **link**: mande-o para o seu celular (WhatsApp para você mesmo, e-mail) e **abra no navegador do celular**. Escolha nome, foto e PIN. Pronto: você é o Administrador.
+
+Para os outros da família: no app, **Configurações → Membros → Convidar**. Leitura de cupons com IA (chave do Claude), e-mails, SMS e Telegram são opcionais e estão nas Partes 5 a 7 abaixo.
+
+> Para atualizar o código no futuro: cole o arquivo novo por cima, depois **Implantar → Gerenciar implantações → ✏️ → Versão: Nova versão → Implantar**. O link da API continua o mesmo.
+
+---
+
+## Instalação detalhada (referência)
+
+A versão passo a passo de tudo, inclusive o que é opcional. Se já fez a instalação curta, pule para a Parte 5.
 
 ### Parte 1 — Criar o "cérebro" no Google (Apps Script)
 
@@ -44,16 +60,16 @@ Você vai precisar apenas de uma **conta Google** (Gmail). Não precisa de cart�
 3. Abra o arquivo `Código.gs` que já vem no projeto, apague o conteúdo e **cole o conteúdo inteiro de [`apps-script/dist/FinancasDaFamilia.gs`](apps-script/dist/FinancasDaFamilia.gs)** (é um arquivo único com todo o back-end; no GitHub, clique em "Raw", selecione tudo e copie).
    - Alternativa para quem usa terminal: ["Publicar com o clasp"](apps-script/README.md#publicar-com-o-clasp) envia os 17 arquivos separados com um comando.
    - Para atualizar no futuro, basta colar o arquivo novo por cima e criar uma nova versão da implantação (Parte 2, nota ao fim).
-4. Clique na **engrenagem ⚙️ "Configurações do projeto"** (barra lateral):
-   - Marque **"Mostrar o arquivo de manifesto appsscript.json no editor"** e cole nele o conteúdo de `apps-script/appsscript.json`.
-   - Em **"Propriedades do script"** → "Adicionar propriedade do script", crie:
+4. **Opcional.** Clique na **engrenagem ⚙️ "Configurações do projeto"** (barra lateral):
+   - Para o OCR de reserva do Google: marque **"Mostrar o arquivo de manifesto appsscript.json no editor"** e cole nele o conteúdo de `apps-script/appsscript.json`.
+   - Em **"Propriedades do script"** → "Adicionar propriedade do script", pode criar:
      | Propriedade | Valor |
      |---|---|
-     | `SOBRENOME` | o sobrenome da família (ex.: `Melo Reis`) |
-     | `CHAVE_API_CLAUDE` | sua chave da API do Claude (começa com `sk-ant-…`; crie em [console.anthropic.com](https://console.anthropic.com)). **Opcional**: sem ela, a leitura de cupons usa o OCR do Google (menos preciso). |
-     | `URL_APP` | o endereço onde o app vai ficar (Parte 3). Pode preencher depois. |
-     | `TOKEN_TELEGRAM` | **Opcional.** Token do bot criado no @BotFather, para lançar e receber avisos pelo Telegram (Parte 7). |
-5. Ative o serviço **Drive** (para o OCR de reserva): barra lateral → **"Serviços" +** → escolha **"Drive API"** → **Adicionar**.
+     | `SOBRENOME` | o sobrenome da família (ex.: `Melo Reis`). Sem ela, o nome da família é editado depois em Configurações. |
+     | `CHAVE_API_CLAUDE` | sua chave da API do Claude (começa com `sk-ant-…`; crie em [console.anthropic.com](https://console.anthropic.com)). Sem ela, a leitura de cupons usa o OCR do Google (menos preciso) e o Assistente responde por regras locais. |
+     | `URL_APP` | só se publicar o app em outro endereço que não `https://luizmeloreis.github.io/Finan-as-familiares/`. |
+     | `TOKEN_TELEGRAM` | token do bot criado no @BotFather, para lançar e receber avisos pelo Telegram (Parte 7). |
+5. **Opcional** (OCR de reserva): ative o serviço **Drive**: barra lateral → **"Serviços" +** → escolha **"Drive API"** → **Adicionar**.
 6. Volte ao editor, abra o arquivo **`setup`**, escolha a função **`instalar`** na lista ao lado de "Depurar" e clique em **▶ Executar**.
 7. O Google vai pedir **autorização**: clique em "Revisar permissões" → escolha sua conta → "Avançado" → "Acessar Finanças da Família (não seguro)" → "Permitir". (É "não seguro" só porque o app é seu, não foi publicado na loja do Google.)
 8. Ao terminar, abra o **"Registro de execução"** (embaixo). Ele mostra:
@@ -93,7 +109,7 @@ Você vai precisar apenas de uma **conta Google** (Gmail). Não precisa de cart�
 
 ### Parte 4 — Instalar no celular de cada um
 
-1. O administrador abre o app, faz login (perfil "Administrador", PIN `1234`) e vai em **Configurações → Membros → Convidar**. Escolha o perfil (Administrador / Adulto / Dependente) e **envie o link ou mostre o QR Code**.
+1. O administrador entra pelo link que `linkDeAcesso()` imprimiu (Passo 3 da instalação curta) e vai em **Configurações → Membros → Convidar**. Escolha o perfil (Administrador / Adulto / Dependente) e **envie o link ou mostre o QR Code**.
 2. A pessoa abre o link **no navegador do celular** (Safari no iPhone, Chrome no Android) e segue as instruções na tela:
    - **iPhone (Safari)**: toque no botão **Compartilhar** (quadrado com seta ⬆️, embaixo) → role e toque em **"Adicionar à Tela de Início"** → **Adicionar**.
    - **Android (Chrome)**: toque no menu **⋮** (canto superior direito) → **"Instalar app"** ou **"Adicionar à tela inicial"** → **Instalar**.
