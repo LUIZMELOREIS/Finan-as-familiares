@@ -15,7 +15,7 @@
  *  - TOKEN_TELEGRAM: token do bot (opcional; ver telegram.gs).
  *  - URL_SERVICO_PUSH / TOKEN_SERVICO_PUSH: notificações push (opcional).
  *  - EMAILS_ADMIN: e-mails dos administradores para os resumos (opcional).
- *  - ID_PASTA / ID_PLANILHA: gravadas automaticamente por instalar().
+ *  - ID_PASTA / ID_PLANILHA: gravadas automaticamente por instalar() (ID_PASTA pode ser definida antes para escolher a pasta).
  */
 
 /** Sobrenome padrão da família (pode editar aqui ou definir SOBRENOME nas Script Properties). */
@@ -46,11 +46,26 @@ function obterOuCriarSubpasta(pai, nome) {
   return it.hasNext() ? it.next() : pai.createFolder(nome);
 }
 
-/** Pasta raiz "Finanças da Família <Sobrenome>" (id em ID_PASTA; procura/cria se preciso). */
+/**
+ * Pasta do Drive escolhida pela família para guardar tudo (planilha, cupons, contas, faturas, backups):
+ * "FINANCAS FAMILIARES - APP". É usada quando a conta que instala tem acesso a ela; senão, a
+ * instalação cria "Finanças da Família <Sobrenome>" na raiz do Drive. ID_PASTA nas Script
+ * Properties tem prioridade sobre as duas.
+ */
+const ID_PASTA_PADRAO = '1bRifuNP_-E256Gb64wIjPKrtkYSzNN4c';
+
+/** Pasta raiz (ID_PASTA → ID_PASTA_PADRAO → cria "Finanças da Família <Sobrenome>"). */
 function pastaRaiz() {
   const id = propriedade('ID_PASTA', '');
   if (id) {
-    try { return DriveApp.getFolderById(id); } catch (e) { /* foi apagada: recria abaixo */ }
+    try { return DriveApp.getFolderById(id); } catch (e) { /* foi apagada: segue abaixo */ }
+  }
+  if (ID_PASTA_PADRAO) {
+    try {
+      const escolhida = DriveApp.getFolderById(ID_PASTA_PADRAO);
+      definirPropriedade('ID_PASTA', escolhida.getId());
+      return escolhida;
+    } catch (e) { /* sem acesso à pasta escolhida: cria uma própria */ }
   }
   const pasta = obterOuCriarSubpasta(DriveApp.getRootFolder(), 'Finanças da Família ' + obterSobrenome());
   definirPropriedade('ID_PASTA', pasta.getId());

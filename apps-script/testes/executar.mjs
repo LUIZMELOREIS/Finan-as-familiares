@@ -226,6 +226,18 @@ teste('montarLinkConvite usa o app publicado por padrão e codifica api/token', 
   assert.ok(g.montarLinkConvite('ABC234', 'Adulto', '', '').startsWith('https://exemplo.com/app/#/entrar?convite=ABC234&perfil=Adulto&api=&familia='))
   props.delete('URL_APP')
 })
+teste('pastaRaiz usa a pasta escolhida pela família quando acessível e grava ID_PASTA', () => {
+  const ID = '1bRifuNP_-E256Gb64wIjPKrtkYSzNN4c'
+  props.delete('ID_PASTA'); cache.delete('ID_PASTA')
+  g.DriveApp = { getFolderById: (id) => { if (id !== ID) throw new Error('sem acesso'); return { getId: () => id } }, getRootFolder: () => { throw new Error('não deveria criar pasta nova') } }
+  assert.equal(g.pastaRaiz().getId(), ID)
+  assert.equal(props.get('ID_PASTA'), ID)
+  // sem acesso à pasta escolhida: cria "Finanças da Família <Sobrenome>" na raiz
+  props.delete('ID_PASTA'); cache.delete('ID_PASTA')
+  g.DriveApp = { getFolderById: () => { throw new Error('sem acesso') }, getRootFolder: () => ({ getFoldersByName: () => ({ hasNext: () => false }), createFolder: (nome) => ({ getId: () => 'nova:' + nome }) }) }
+  assert.equal(g.pastaRaiz().getId(), 'nova:Finanças da Família Melo Reis')
+  delete g.DriveApp; props.delete('ID_PASTA'); cache.delete('ID_PASTA')
+})
 teste('criarConvite grava convite ligado ao usuário indicado', () => {
   const c = g.criarConvite('Administrador', 'instalacao', 'u_admin')
   const lido = g.lerConvite(c.codigo)
