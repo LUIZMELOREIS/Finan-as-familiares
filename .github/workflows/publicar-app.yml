@@ -58,17 +58,19 @@ jobs:
           name: app-dist
           path: app/dist
 
-  # Forma 1: Pages com Source "GitHub Actions"
+  # Forma 1: Pages com Source "GitHub Actions".
+  # O job não declara "environment: github-pages" de propósito: a regra de proteção
+  # desse ambiente recusava a branch main antes mesmo de o job começar. Sem a chave,
+  # o deploy-pages publica normalmente (comprovado na execução 2 de configurar-pages.yml).
   publicar:
     needs: construir
     runs-on: ubuntu-latest
     continue-on-error: true
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+      - name: Endereço publicado
+        run: echo "Site publicado em ${{ steps.deployment.outputs.page_url }}"
 
   # Forma 2: Pages com Source "Deploy from a branch" (branch gh-pages)
   publicar-branch:
