@@ -78,7 +78,9 @@ Você vai precisar apenas de uma **conta Google** (Gmail). Não precisa de cart�
 ### Parte 3 — Publicar o app (grátis)
 
 **Opção A — GitHub Pages (recomendada):**
-1. No GitHub, abra este repositório → **Settings → Pages → Source: "GitHub Actions"**.
+1. No GitHub, abra este repositório → **Settings → Pages**. Em "Build and deployment", escolha **uma** das duas formas (as duas funcionam com o workflow deste repositório):
+   - **Source: "GitHub Actions"** — mais simples; ou
+   - **Source: "Deploy from a branch"**, **Branch: `gh-pages`**, pasta **`/ (root)`** — a branch `gh-pages` aparece depois da primeira execução do workflow (passo 3).
 2. Em **Settings → Secrets and variables → Actions → Variables → New repository variable**, crie:
    - `VITE_API_URL` = a URL da API (Parte 2)
    - `VITE_TOKEN_FAMILIA` = o token da família (Parte 1, passo 8)

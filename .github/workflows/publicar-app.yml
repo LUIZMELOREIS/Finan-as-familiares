@@ -1,6 +1,12 @@
 # Publica o app (pasta /app) no GitHub Pages a cada push na branch main.
-# Para ativar: no GitHub, Settings → Pages → Source: "GitHub Actions".
-# Segredos opcionais (Settings → Secrets and variables → Actions → Variables):
+#
+# Funciona com QUALQUER uma das duas formas de configurar o Pages em Settings → Pages:
+#   1) Source: "GitHub Actions"            → o job "publicar" entrega direto;
+#   2) Source: "Deploy from a branch",
+#      Branch: gh-pages, pasta / (root)    → o job "publicar-branch" mantém a branch gh-pages.
+# Como os dois jobs rodam sempre, o que não se aplica à sua configuração só é ignorado.
+#
+# Variáveis opcionais (Settings → Secrets and variables → Actions → Variables):
 #   VITE_API_URL       URL do App da Web do Apps Script
 #   VITE_TOKEN_FAMILIA token da família (aba Config da planilha)
 name: Publicar app no GitHub Pages
@@ -12,7 +18,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -42,16 +48,42 @@ jobs:
           VITE_BASE: /${{ github.event.repository.name }}/
           VITE_VERSAO: ${{ github.sha }}
         run: npm run build
+      - name: Evita o Jekyll do Pages tocar nos arquivos
+        run: touch dist/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:
           path: app/dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-dist
+          path: app/dist
 
+  # Forma 1: Pages com Source "GitHub Actions"
   publicar:
     needs: construir
     runs-on: ubuntu-latest
+    continue-on-error: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # Forma 2: Pages com Source "Deploy from a branch" (branch gh-pages)
+  publicar-branch:
+    needs: construir
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-dist
+          path: dist
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
+          force_orphan: true
+          commit_message: 'Publicar app ${{ github.sha }}'
