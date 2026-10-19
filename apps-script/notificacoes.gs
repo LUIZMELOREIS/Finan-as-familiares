@@ -109,7 +109,7 @@ function lembreteDiario() {
   try { lerAba('Telegram').filter((r) => r.ativo && r.chat_id).forEach((r) => enviarTelegram(r.usuario_id, TEXTO_LEMBRETE)); } catch (e) { console.warn('telegram: ' + e.message); }
   if (!enviado) {
     enviarEmailAdministradores(TEXTO_LEMBRETE, '<p>' + TEXTO_LEMBRETE + '</p><p>Abra o app e registre os gastos do dia. ' +
-      (propriedade('URL_APP', '') ? '<a href="' + propriedade('URL_APP') + '">Abrir o app</a>' : '') + '</p>' +
+      '<a href="' + obterUrlApp() + '">Abrir o app</a></p>' +
       '<p><small>Para receber este lembrete como notificação no celular, configure o serviço de push (URL_SERVICO_PUSH). Veja o README.</small></p>');
   }
   return enviado;

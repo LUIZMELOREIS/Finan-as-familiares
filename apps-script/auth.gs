@@ -100,17 +100,26 @@ function limparConvitesVencidos() {
  */
 function acaoGerarConvite(p, ctx) {
   const perfil = PERFIS_VALIDOS.indexOf(normalizarPerfil(p.perfil)) >= 0 ? normalizarPerfil(p.perfil) : 'Adulto';
+  const convite = criarConvite(perfil, ctx.uid, p.usuario_id_convidado || '');
+  const cfg = lerConfigCompleta();
+  const url = montarLinkConvite(convite.codigo, perfil, urlDoAppWeb(), cfg.token_familia || '');
+  return { codigo_convite: convite.codigo, url, expira_em: convite.expira_em };
+}
+
+/** Cria e grava um convite (código de 6 caracteres, validade DIAS_VALIDADE_CONVITE). usuarioId liga o convite a um usuário já existente. */
+function criarConvite(perfil, criadoPor, usuarioId) {
   limparConvitesVencidos();
   const codigo = gerarCodigoConvite();
   const expira = new Date(Date.now() + DIAS_VALIDADE_CONVITE * 86400000);
-  const convite = { codigo, perfil, expira_em: expira.toISOString(), criado_por: ctx.uid, usuario_id: p.usuario_id_convidado || '' };
+  const convite = { codigo, perfil, expira_em: expira.toISOString(), criado_por: criadoPor || '', usuario_id: usuarioId || '' };
   definirPropriedade(chaveConvite(codigo), JSON.stringify(convite));
-  const cfg = lerConfigCompleta();
-  const base = propriedade('URL_APP', '');
-  const api = urlDoAppWeb();
-  const url = base + '#/entrar?convite=' + codigo + '&perfil=' + encodeURIComponent(perfil) +
-    '&api=' + encodeURIComponent(api) + '&familia=' + encodeURIComponent(cfg.token_familia || '');
-  return { codigo_convite: codigo, url, expira_em: convite.expira_em };
+  return convite;
+}
+
+/** Link que o convidado abre no celular: app publicado + convite + URL da API + token da família. */
+function montarLinkConvite(codigo, perfil, urlApi, tokenFamilia) {
+  return obterUrlApp() + '#/entrar?convite=' + codigo + '&perfil=' + encodeURIComponent(perfil) +
+    '&api=' + encodeURIComponent(urlApi || '') + '&familia=' + encodeURIComponent(tokenFamilia || '');
 }
 
 /** URL pública deste App da Web (vazia se ainda não foi implantado). */

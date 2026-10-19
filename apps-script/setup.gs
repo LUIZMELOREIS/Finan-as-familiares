@@ -10,7 +10,7 @@
  *
  * Script Properties usadas (Configurações do projeto → Propriedades do script):
  *  - SOBRENOME (opcional): nome da família. Padrão: SOBRENOME_PADRAO abaixo.
- *  - URL_APP: endereço do app publicado (para montar o link de convite).
+ *  - URL_APP (opcional): endereço do app publicado (para montar o link de convite). Padrão: URL_APP_PADRAO.
  *  - CHAVE_API_CLAUDE / MODELO_CLAUDE: leitura inteligente e assistente (opcional).
  *  - TOKEN_TELEGRAM: token do bot (opcional; ver telegram.gs).
  *  - URL_SERVICO_PUSH / TOKEN_SERVICO_PUSH: notificações push (opcional).
@@ -20,6 +20,13 @@
 
 /** Sobrenome padrão da família (pode editar aqui ou definir SOBRENOME nas Script Properties). */
 const SOBRENOME_PADRAO = 'Melo Reis';
+
+/** Endereço padrão do app publicado (GitHub Pages deste repositório). Pode sobrescrever com URL_APP nas Script Properties. */
+const URL_APP_PADRAO = 'https://luizmeloreis.github.io/Finan-as-familiares/';
+
+function obterUrlApp() {
+  return propriedade('URL_APP', URL_APP_PADRAO);
+}
 
 /** Subpastas criadas dentro de "Finanças da Família <Sobrenome>". */
 const SUBPASTAS = ['Cupons e Recibos', 'Contas da Casa', 'Contas da Casa/_Entrada', 'Faturas de Cartão', 'Projetos e Sonhos', 'Identidade da Família', 'Backups'];
@@ -143,10 +150,50 @@ function instalar() {
     planilha: planilha.getUrl(),
     token_familia: cfg.token_familia,
     migracao,
-    proximo_passo: 'Implantar → Nova implantação → App da Web (Executar como: Eu; Acesso: Qualquer pessoa). Depois defina URL_APP e, se quiser, CHAVE_API_CLAUDE e TOKEN_TELEGRAM nas Propriedades do script (para o Telegram, rode configurarTelegram()).',
+    proximo_passo: 'Implantar → Nova implantação → App da Web (Executar como: Eu; Acesso: Qualquer pessoa) → Implantar. ' +
+      'Depois volte aqui, escolha a função linkDeAcesso e clique em Executar: o registro mostra o link para abrir no celular. ' +
+      'Opcional: CHAVE_API_CLAUDE e TOKEN_TELEGRAM nas Propriedades do script (para o Telegram, rode configurarTelegram()).',
   };
   console.log('Instalação concluída.\n' + (avisoPin ? avisoPin + '\n' : '') + JSON.stringify(resumo, null, 2));
   return resumo;
+}
+
+/**
+ * linkDeAcesso — Rode DEPOIS de implantar como App da Web (e depois de instalar()).
+ * Cria um convite de Administrador e imprime no registro de execução um link pronto para
+ * abrir no celular: ele já leva a URL da API, o token da família e o código do convite,
+ * então não é preciso digitar nada nem mexer em Propriedades do script.
+ *
+ * Na primeira vez, o convite fica ligado ao usuário "Administrador" criado por instalar():
+ * quem abrir o link escolhe nome, foto e PIN e passa a ser esse administrador.
+ * Nas vezes seguintes, cria um convite de Administrador novo (para outro adulto da família).
+ */
+function linkDeAcesso() {
+  const cfg = lerConfigCompleta();
+  if (!cfg.token_familia) throw new Error('Rode instalar() primeiro.');
+  const api = urlDoAppWeb();
+  const usuarios = lerAba('Usuarios');
+  const adminInicial = usuarios.find((u) => u.perfil === 'Administrador' && u.origem === 'instalacao' && u.apelido === 'Administrador');
+  const convite = criarConvite('Administrador', adminInicial ? adminInicial.id : 'instalacao', adminInicial ? adminInicial.id : '');
+  const link = montarLinkConvite(convite.codigo, 'Administrador', api, cfg.token_familia);
+  const linhas = [];
+  if (!api) {
+    linhas.push('O App da Web ainda não foi implantado. Faça: Implantar → Nova implantação → App da Web (Executar como: Eu; Acesso: Qualquer pessoa) → Implantar. Depois rode linkDeAcesso() de novo.');
+    linhas.push('Enquanto isso, estes dados servem para "Já tenho a URL da API" no app:');
+  } else {
+    linhas.push('ABRA ESTE LINK NO NAVEGADOR DO CELULAR (vale por ' + DIAS_VALIDADE_CONVITE + ' dias, uma única vez):');
+    linhas.push(link);
+    linhas.push('');
+    linhas.push('No celular: Compartilhar → "Adicionar à Tela de Início" (iPhone) ou menu ⋮ → "Instalar app" (Android); depois escolha nome, foto e PIN.');
+    if (/\/dev$/.test(api)) linhas.push('Atenção: a URL da API terminou em /dev. Use a URL que termina em /exec (Implantar → Gerenciar implantações) no lugar dela.');
+    linhas.push('');
+    linhas.push('Se preferir digitar no app ("Já tenho a URL da API"):');
+  }
+  linhas.push('  URL da API: ' + (api || '(implante primeiro)'));
+  linhas.push('  Token da família: ' + cfg.token_familia);
+  linhas.push('  Código do convite: ' + convite.codigo + ' (perfil Administrador)');
+  console.log(linhas.join('\n'));
+  return { link, url_api: api, token_familia: cfg.token_familia, codigo_convite: convite.codigo, expira_em: convite.expira_em };
 }
 
 // ---------- Migração da versão 1 ----------

@@ -27,7 +27,7 @@ export function ConectarApi({ aoConectar, aoCancelar, codigoInicial = '', perfil
   return (
     <form className="card" style={{ width: '100%', textAlign: 'left', padding: 18 }} onSubmit={conectar}>
       <h2 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 4px' }}>Conectar à API da família</h2>
-      <p className="sub" style={{ margin: '0 0 12px' }}>Os três dados aparecem no fim de <code>instalar()</code> do Apps Script (aba Config da planilha).</p>
+      <p className="sub" style={{ margin: '0 0 12px' }}>Os três dados aparecem no registro de <code>linkDeAcesso()</code> do Apps Script (o token também fica na aba Config da planilha).</p>
       <div className="field"><label htmlFor="api-url">URL da API (App da Web)</label><input id="api-url" value={url} onChange={(e) => setUrl(e.target.value)} inputMode="url" autoComplete="off" placeholder="https://script.google.com/macros/s/…/exec" required /></div>
       <div className="field"><label htmlFor="api-fam">Token da família</label><input id="api-fam" value={tokenFamilia} onChange={(e) => setTokenFamilia(e.target.value)} autoComplete="off" required /></div>
       <div className="field"><label htmlFor="api-conv">Código de convite do administrador</label><input id="api-conv" value={codigo} onChange={(e) => setCodigo(e.target.value)} autoComplete="off" style={{ textTransform: 'uppercase' }} required /></div>
