@@ -81,6 +81,8 @@ Você vai precisar apenas de uma **conta Google** (Gmail). Não precisa de cart�
 1. No GitHub, abra este repositório → **Settings → Pages**. Em "Build and deployment", escolha **uma** das duas formas (as duas funcionam com o workflow deste repositório):
    - **Source: "GitHub Actions"** — mais simples; ou
    - **Source: "Deploy from a branch"**, **Branch: `gh-pages`**, pasta **`/ (root)`** — a branch `gh-pages` aparece depois da primeira execução do workflow (passo 3).
+
+   > Se o job `publicar` falhar em um segundo com a mensagem *"Branch main is not allowed to deploy to github-pages due to environment protection rules"*, não é preciso mexer em nada: o workflow já publica sem passar por esse ambiente. Se quiser destravar na hora, rode **Actions → "Configurar GitHub Pages" → Run workflow**.
 2. Em **Settings → Secrets and variables → Actions → Variables → New repository variable**, crie:
    - `VITE_API_URL` = a URL da API (Parte 2)
    - `VITE_TOKEN_FAMILIA` = o token da família (Parte 1, passo 8)
