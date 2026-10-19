@@ -512,6 +512,14 @@ function linkDeAcesso() {
     linhas.push('O App da Web ainda não foi implantado. Faça: Implantar → Nova implantação → App da Web (Executar como: Eu; Acesso: Qualquer pessoa) → Implantar. Depois rode linkDeAcesso() de novo.');
     linhas.push('Enquanto isso, estes dados servem para "Já tenho a URL da API" no app:');
   } else {
+    const teste = testarImplantacao(api);
+    if (teste.ok) {
+      linhas.push('Implantação conferida: a API responde publicamente (' + api + ').');
+    } else {
+      linhas.push('ATENÇÃO: a API não respondeu como esperado (' + teste.motivo + ').');
+      linhas.push('Corrija em Implantar → Gerenciar implantações → ✏️ Editar → Quem pode acessar: "Qualquer pessoa" → Versão: Nova versão → Implantar. Depois rode linkDeAcesso() de novo.');
+    }
+    linhas.push('');
     linhas.push('ABRA ESTE LINK NO NAVEGADOR DO CELULAR (vale por ' + DIAS_VALIDADE_CONVITE + ' dias, uma única vez):');
     linhas.push(link);
     linhas.push('');
@@ -525,6 +533,23 @@ function linkDeAcesso() {
   linhas.push('  Código do convite: ' + convite.codigo + ' (perfil Administrador)');
   console.log(linhas.join('\n'));
   return { link, url_api: api, token_familia: cfg.token_familia, codigo_convite: convite.codigo, expira_em: convite.expira_em };
+}
+
+/**
+ * Chama a própria API como um anônimo (sem cookies do Google) e diz se ela responde JSON.
+ * Se a implantação não estiver como "Qualquer pessoa", o Google devolve uma página de login (HTML).
+ */
+function testarImplantacao(urlApi) {
+  if (!urlApi) return { ok: false, motivo: 'sem URL de implantação' };
+  try {
+    const resp = UrlFetchApp.fetch(urlApi + (urlApi.indexOf('?') >= 0 ? '&' : '?') + 'acao=ping', { muteHttpExceptions: true, followRedirects: true });
+    const texto = String(resp.getContentText() || '').trim();
+    if (texto.charAt(0) !== '{') return { ok: false, motivo: 'HTTP ' + resp.getResponseCode() + ', resposta não é JSON — provavelmente a implantação pede login' };
+    const json = JSON.parse(texto);
+    return json && json.ok ? { ok: true } : { ok: false, motivo: (json && json.erro) || 'resposta sem ok' };
+  } catch (e) {
+    return { ok: false, motivo: String(e && e.message || e) };
+  }
 }
 
 // ---------- Migração da versão 1 ----------

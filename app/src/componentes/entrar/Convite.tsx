@@ -1,7 +1,7 @@
 /**
  * Entrada por convite: Instalar na tela inicial → nome, apelido, cor, foto → PIN (duas vezes) → entrar_convite.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Usuario } from '../../tipos'
 import { api, arquivoParaBase64, comprimirImagem, type Sessao } from '../../api/cliente'
 import { Avatar } from '../Avatar'
@@ -30,6 +30,22 @@ export function Convite({ convite, aoEntrar, aoCancelar }: { convite: DadosConvi
   const [pin2, setPin2] = useState('')
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
+  const [estadoApi, setEstadoApi] = useState<'verificando' | 'ok' | 'falha'>(convite.url_api ? 'verificando' : 'ok')
+  const [erroApi, setErroApi] = useState('')
+
+  // Com API real, confere logo no início se ela responde: evita descobrir só depois de digitar nome e PIN.
+  const verificarApi = async () => {
+    if (!convite.url_api) return
+    setEstadoApi('verificando'); setErroApi('')
+    try {
+      const r = await api<{ versao: string }>('ping', {}, { url_api: convite.url_api, token_familia: convite.token_familia, token: '', usuario_id: '' })
+      if (!r?.versao) throw new Error('A API respondeu, mas não parece ser o Finanças da Família.')
+      setEstadoApi('ok')
+    } catch (e) {
+      setEstadoApi('falha'); setErroApi(e instanceof Error ? e.message : 'A API não respondeu.')
+    }
+  }
+  useEffect(() => { void verificarApi() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const escolherFoto = async (arq: File | undefined) => {
     if (!arq) return
@@ -65,6 +81,15 @@ export function Convite({ convite, aoEntrar, aoCancelar }: { convite: DadosConvi
         <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0, flex: 1 }}>{titulo[passo]}</h2>
         <span className="sub num">{['instalar', 'dados', 'pin', 'confirmar'].indexOf(passo) + 1}/4</span>
       </div>
+
+      {estadoApi === 'falha' && (
+        <div role="alert" style={{ background: 'rgba(229,83,91,.12)', border: '1px solid rgba(229,83,91,.4)', borderRadius: 12, padding: '10px 12px', marginBottom: 12, fontSize: 13 }}>
+          <p style={{ margin: '0 0 6px', color: 'var(--red)' }}><Icone nome="triangle-alert" tamanho={15} style={{ display: 'inline', verticalAlign: -3, marginRight: 6 }} />Não consegui falar com a API da família.</p>
+          <p style={{ margin: '0 0 8px', color: 'var(--muted)' }}>{erroApi}</p>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void verificarApi()}>Tentar de novo</button>
+        </div>
+      )}
+      {estadoApi === 'verificando' && <p className="sub" style={{ margin: '0 0 10px' }}>Conferindo a conexão com a API…</p>}
 
       {passo === 'instalar' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13.5 }}>
