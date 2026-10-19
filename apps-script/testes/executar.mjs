@@ -238,6 +238,15 @@ teste('pastaRaiz usa a pasta escolhida pela família quando acessível e grava I
   assert.equal(g.pastaRaiz().getId(), 'nova:Finanças da Família Melo Reis')
   delete g.DriveApp; props.delete('ID_PASTA'); cache.delete('ID_PASTA')
 })
+teste('testarImplantacao distingue JSON público de página de login', () => {
+  g.UrlFetchApp = { fetch: () => ({ getResponseCode: () => 200, getContentText: () => '{"ok":true,"dados":{"versao":"2"}}' }) }
+  assert.equal(g.testarImplantacao('https://script.google.com/macros/s/X/exec').ok, true)
+  g.UrlFetchApp = { fetch: () => ({ getResponseCode: () => 200, getContentText: () => '<!DOCTYPE html><html>login</html>' }) }
+  const r = g.testarImplantacao('https://script.google.com/macros/s/X/exec')
+  assert.equal(r.ok, false); assert.match(r.motivo, /login/)
+  assert.equal(g.testarImplantacao('').ok, false)
+  delete g.UrlFetchApp
+})
 teste('criarConvite grava convite ligado ao usuário indicado', () => {
   const c = g.criarConvite('Administrador', 'instalacao', 'u_admin')
   const lido = g.lerConvite(c.codigo)

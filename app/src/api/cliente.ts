@@ -88,7 +88,10 @@ export async function api<T = unknown>(acao: string, params: Record<string, unkn
       await enfileirar(corpo)
       throw new ErroApi('Não foi possível conectar. Guardamos o lançamento para enviar depois.', true)
     }
-    throw new ErroApi('Não foi possível conectar ao servidor. Verifique a internet.', true)
+    const online = typeof navigator === 'undefined' || navigator.onLine
+    throw new ErroApi(online
+      ? 'A API não respondeu. Se a internet está normal, confira no Apps Script: Implantar → Gerenciar implantações → Quem pode acessar: "Qualquer pessoa", e use a URL que termina em /exec.'
+      : 'Sem internet. Verifique a conexão e tente de novo.', true)
   }
 
   let json: RespostaApi<T>
