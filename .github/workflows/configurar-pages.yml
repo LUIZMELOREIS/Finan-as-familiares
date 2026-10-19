@@ -1,0 +1,51 @@
+# Configura o GitHub Pages para publicar a branch gh-pages (origem "Deploy from a branch").
+# Rode manualmente em Actions → "Configurar GitHub Pages" → Run workflow.
+# Serve para quando o ambiente github-pages bloqueia o job de publicação por Actions.
+name: Configurar GitHub Pages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+
+jobs:
+  configurar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apontar o Pages para a branch gh-pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -u
+          if gh api "repos/$REPO/pages" > atual.json 2> erro.txt; then
+            echo "Pages já existe. Configuração atual:"
+            cat atual.json
+            echo "Atualizando a origem para gh-pages / (root)..."
+            gh api -X PUT "repos/$REPO/pages" \
+              -f build_type=legacy -f 'source[branch]=gh-pages' -f 'source[path]=/'
+          else
+            echo "Pages ainda não existe (resposta abaixo). Criando com origem gh-pages / (root)..."
+            cat erro.txt
+            gh api -X POST "repos/$REPO/pages" \
+              -f build_type=legacy -f 'source[branch]=gh-pages' -f 'source[path]=/'
+          fi
+          echo "Configuração final:"
+          gh api "repos/$REPO/pages"
+          echo "Pedindo uma construção do site..."
+          gh api -X POST "repos/$REPO/pages/builds" || true
+
+      - name: Esperar o site responder
+        run: |
+          URL="https://$(echo '${{ github.repository_owner }}' | tr 'A-Z' 'a-z').github.io/${{ github.event.repository.name }}/"
+          echo "Endereço: $URL"
+          for i in $(seq 1 18); do
+            CODIGO=$(curl -sS -o /dev/null -w "%{http_code}" "$URL" || true)
+            echo "Tentativa $i: HTTP $CODIGO"
+            if [ "$CODIGO" = "200" ]; then echo "Site no ar: $URL"; exit 0; fi
+            sleep 10
+          done
+          echo "O site ainda não respondeu 200. Veja a configuração acima e a aba Settings → Pages."
+          exit 1
