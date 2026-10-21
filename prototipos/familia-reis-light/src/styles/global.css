@@ -32,7 +32,7 @@ h1, h2, h3, p { margin: 0; }
 /* ==== CABEÇALHO ==== */
 .header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .header h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.2px; }
-.header .mes { color: var(--muted); font-size: 14px; text-transform: capitalize; }
+.header .mes { color: var(--muted); font-size: 14px; }
 .badge { position: absolute; top: 6px; right: 6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--red); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; border: 2px solid var(--surface); }
 
 /* ==== CARD DE SALDO ==== */

@@ -8,7 +8,7 @@ export function StatementScreen() {
     <>
       <header>
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Extrato</h1>
-        <p style={{ color: 'var(--muted)', textTransform: 'capitalize' }}>{mesReferencia()}</p>
+        <p style={{ color: 'var(--muted)' }}>{mesReferencia()}</p>
       </header>
       <TransactionList transacoes={TRANSACOES} mostrarData />
     </>
