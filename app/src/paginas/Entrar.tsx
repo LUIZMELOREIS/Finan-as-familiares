@@ -38,7 +38,7 @@ export default function Entrar({ erro }: { erro?: string }) {
   const [convite, setConvite] = useState<DadosConvite | null>(codigoConvite && (conviteDemo || (urlApiConvite && familiaConvite))
     ? { codigo: codigoConvite, perfil: perfilConvite, url_api: urlApiConvite, token_familia: conviteDemo ? 'demo' : familiaConvite }
     : null)
-  const [modo, setModo] = useState<Modo>(convite ? 'convite' : codigoConvite ? 'api' : perfis.length ? 'perfis' : 'inicio')
+  const [modo, setModo] = useState<Modo>(convite ? 'convite' : codigoConvite || familiaConvite ? 'api' : perfis.length ? 'perfis' : 'inicio')
   const [perfil, setPerfil] = useState<PerfilLembrado | null>(null)
   const [pin, setPin] = useState('')
   const [erroPin, setErroPin] = useState('')
@@ -151,6 +151,10 @@ export default function Entrar({ erro }: { erro?: string }) {
             perfil={codigoConvite ? perfilConvite : 'Administrador'}
             aoCancelar={() => setModo(perfis.length ? 'perfis' : 'inicio')}
             aoConectar={(c) => { setConvite(c); setModo('convite') }}
+            aoPerfis={(r, base) => {
+              setPerfis(r.perfis.map((u) => ({ usuario_id: u.id, apelido: u.apelido, nome: u.nome, cor: u.cor, avatar: u.avatar, url_api: base.url_api, token_familia: base.token_familia, nome_familia: r.nome_familia, url_foto_capa: r.url_foto_capa })))
+              setPerfil(null); setModo('perfis')
+            }}
           />
         )}
 

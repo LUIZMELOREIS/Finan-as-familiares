@@ -44,6 +44,7 @@ function obterAcoes() {
     ping: { perfil: null, fn: acaoPing },
     entrar_convite: { perfil: null, fn: acaoEntrarConvite, escrita: true },
     entrar_pin: { perfil: null, fn: acaoEntrarPin },
+    perfis_familia: { perfil: null, fn: acaoPerfisFamilia },
 
     // Carga inicial e lançamentos
     bootstrap: { perfil: 'Dependente', fn: acaoBootstrap },
@@ -2373,6 +2374,18 @@ function lerConvite(codigo) {
   const texto = propriedade(chaveConvite(codigo), '');
   if (!texto) return null;
   try { return JSON.parse(texto); } catch (e) { return null; }
+}
+
+/**
+ * perfis_familia (só token da família): lista os perfis ativos para entrar em outro aparelho
+ * (URL + token + PIN, sem convite). Não devolve tokens nem dados sensíveis.
+ */
+function acaoPerfisFamilia() {
+  const cfg = lerConfigCompleta();
+  const perfis = lerAba('Usuarios').filter((u) => u.ativo).map((u) => ({
+    id: u.id, apelido: u.apelido, nome: u.nome, cor: u.cor || 'indigo', avatar: u.avatar || '', perfil: normalizarPerfil(u.perfil),
+  }));
+  return { nome_familia: cfg.nome_familia || '', url_foto_capa: cfg.url_foto_capa || '', perfis };
 }
 
 /** Remove convites vencidos ou usados (faxina). */

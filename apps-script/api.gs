@@ -33,6 +33,7 @@ function obterAcoes() {
     ping: { perfil: null, fn: acaoPing },
     entrar_convite: { perfil: null, fn: acaoEntrarConvite, escrita: true },
     entrar_pin: { perfil: null, fn: acaoEntrarPin },
+    perfis_familia: { perfil: null, fn: acaoPerfisFamilia },
 
     // Carga inicial e lançamentos
     bootstrap: { perfil: 'Dependente', fn: acaoBootstrap },

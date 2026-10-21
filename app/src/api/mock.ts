@@ -648,6 +648,8 @@ export async function chamarMock(corpo: Record<string, unknown>): Promise<Respos
         const u: Usuario = { id: gerarId('u'), nome: p.nome || p.apelido, apelido: p.apelido, avatar: p.avatar || '', cor: p.cor || 'indigo', perfil: p.perfil === 'Júnior' ? 'Dependente' : p.perfil || 'Adulto', ativo: true, criado_em: agoraIso(), ultimo_acesso: agoraIso(), token: gerarId('tok') }
         b.usuarios.push(u); await persistir(); return ok(u)
       }
+      case 'perfis_familia':
+        return ok({ nome_familia: b.config.nome_familia, url_foto_capa: b.config.url_foto_capa || '', perfis: b.usuarios.filter((u) => u.ativo).map((u) => ({ id: u.id, apelido: u.apelido, nome: u.nome, cor: u.cor, avatar: u.avatar || '', perfil: u.perfil })) })
       case 'entrar_pin': {
         const u = b.usuarios.find((x) => x.id === p.usuario_id)
         if (!u) return erro('Usuário não encontrado')
