@@ -2,7 +2,7 @@
  * Finanças da Família — back-end Google Apps Script (arquivo único).
  * Gerado por apps-script/testes/empacotar.mjs a partir dos arquivos em apps-script/*.gs.
  * Cole este arquivo inteiro no Código.gs do seu projeto e o appsscript.json no manifesto.
- * Gerado em 2026-10-19.
+ * Gerado em 2026-10-21.
  */
 
 // ==============================================================================
@@ -163,9 +163,26 @@ function extrairParametros(e, metodo) {
   return params;
 }
 
+/**
+ * Numa requisição real, ScriptApp.getService().getUrl() devolve a URL pública (/exec). Guardamos em URL_API
+ * para que linkDeAcesso() e os convites gerados no editor (onde a mesma chamada devolve a URL de teste /dev)
+ * usem sempre a URL certa.
+ */
+function memorizarUrlExec() {
+  try {
+    const atual = ScriptApp.getService().getUrl() || '';
+    if (!/\/exec$/.test(atual)) return;
+    const cache = CacheService.getScriptCache();
+    if (cache.get('URL_API') === atual) return;
+    if (propriedade('URL_API', '') !== atual) definirPropriedade('URL_API', atual);
+    cache.put('URL_API', atual, 21600);
+  } catch (erro) { /* nunca derruba a requisição por causa disso */ }
+}
+
 /** Decide entre webhook de SMS, webhook do Telegram e ação normal; nunca deixa uma exceção escapar sem envelope. */
 function tratarRequisicao(e, metodo) {
   try {
+    memorizarUrlExec();
     const parametrosUrl = (e && e.parameter) || {};
     // O Telegram envia o "update" como JSON no corpo; o sinal vem só na URL (?telegram=1).
     if (String(parametrosUrl.telegram || '') === '1') return { ok: true, dados: tratarWebhookTelegram(e, parametrosUrl), versao: VERSAO_API };
@@ -524,7 +541,7 @@ function linkDeAcesso() {
     linhas.push(link);
     linhas.push('');
     linhas.push('No celular: Compartilhar → "Adicionar à Tela de Início" (iPhone) ou menu ⋮ → "Instalar app" (Android); depois escolha nome, foto e PIN.');
-    if (/\/dev$/.test(api)) linhas.push('Atenção: a URL da API terminou em /dev. Use a URL que termina em /exec (Implantar → Gerenciar implantações) no lugar dela.');
+    if (/\/dev$/.test(api)) linhas.push('Atenção: só conheço a URL de teste (/dev), que exige login. Abra uma vez no navegador a URL da implantação (Implantar → Gerenciar implantações, termina em /exec) e rode linkDeAcesso() de novo: a URL pública fica memorizada. Ou defina URL_API nas Propriedades do script.');
     linhas.push('');
     linhas.push('Se preferir digitar no app ("Já tenho a URL da API"):');
   }
@@ -2400,9 +2417,16 @@ function montarLinkConvite(codigo, perfil, urlApi, tokenFamilia) {
     '&api=' + encodeURIComponent(urlApi || '') + '&familia=' + encodeURIComponent(tokenFamilia || '');
 }
 
-/** URL pública deste App da Web (vazia se ainda não foi implantado). */
+/**
+ * URL pública deste App da Web (/exec). No editor, ScriptApp devolve a URL de teste (/dev), que exige login;
+ * nesse caso usamos a URL_API memorizada pela última requisição real (ou definida nas Script Properties).
+ */
 function urlDoAppWeb() {
-  try { return ScriptApp.getService().getUrl() || ''; } catch (e) { return ''; }
+  let atual = '';
+  try { atual = ScriptApp.getService().getUrl() || ''; } catch (e) { atual = ''; }
+  if (/\/exec$/.test(atual)) return atual;
+  const salva = propriedade('URL_API', '');
+  return salva || atual;
 }
 
 /**
