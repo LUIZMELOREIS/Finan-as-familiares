@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "lint": "oxlint",
+    "brasao": "node scripts/gerar-brasao.mjs && node scripts/gerar-icones.mjs",
     "icones": "node scripts/gerar-icones.mjs",
     "capturas": "node scripts/capturas.mjs",
     "e2e": "node scripts/e2e-demo.mjs"

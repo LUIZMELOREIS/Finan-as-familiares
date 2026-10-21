@@ -1,9 +1,20 @@
-/** Brasão padrão (traço dourado sobre azul-noite) usado no círculo da barra lateral e na capa. */
-export function BrasaoPadrao({ tamanho = 30 }: { tamanho?: number }) {
+import { GRADIENTE_OURO, OPACIDADE_PETALA, PETALAS } from './brasao/rosacea.gerado'
+
+/**
+ * Brasão padrão: rosácea dourada de oito luas entrelaçadas (gerada por scripts/gerar-brasao.mjs),
+ * usada no círculo da barra lateral, na capa e como base dos ícones do app.
+ */
+export function BrasaoPadrao({ tamanho = 32 }: { tamanho?: number }) {
   return (
-    <svg viewBox="0 0 40 40" width={tamanho} height={tamanho} fill="none" stroke="#F2C552" strokeWidth="1.6" strokeLinejoin="round" aria-hidden="true">
-      <path d="M20 4 33 9v10c0 8.5-5.6 14.4-13 17-7.4-2.6-13-8.5-13-17V9z" />
-      <path d="M20 12v16M14 18h12" />
+    <svg viewBox="0 0 512 512" width={tamanho} height={tamanho} aria-hidden="true">
+      <defs>
+        <linearGradient id="brasao-ouro" x1="0" y1="0" x2="1" y2="1">
+          {GRADIENTE_OURO.map(([offset, cor]) => <stop key={offset} offset={offset} stopColor={cor} />)}
+        </linearGradient>
+      </defs>
+      <g fill="url(#brasao-ouro)" fillOpacity={OPACIDADE_PETALA}>
+        {PETALAS.map((d) => <path key={d} d={d} />)}
+      </g>
     </svg>
   )
 }

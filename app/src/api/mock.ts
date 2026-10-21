@@ -337,9 +337,9 @@ function resumoMes(b: Banco, uid: string, comp: string, filtroUsuario?: string):
     r.por_categoria[o.categoria_id] = { realizado: 0, orcado: o.valor_planejado }
     if (c) { r.por_grupo[c.grupo_id].orcado += o.valor_planejado; r.por_tipo[c.tipo_id].orcado += o.valor_planejado }
   }
-  // receita prevista = salários do mês anterior (ou do próprio mês)
+  // receita prevista = planejado no Orçamento para receitas; senão, salários do mês anterior (ou padrão da demo)
   const recAnt = ativos(b.lancamentos).filter((l) => l.competencia === somarMeses(comp, -1) && l.tipo === 'receita' && l.status === 'confirmado').reduce((s, l) => s + l.valor, 0)
-  r.por_tipo.t_receitas.orcado = recAnt || 16300
+  r.por_tipo.t_receitas.orcado = r.por_tipo.t_receitas.orcado > 0 ? r.por_tipo.t_receitas.orcado : recAnt || 16300
   for (const l of ls) {
     const c = catMap.get(l.categoria_id)
     if (!c) continue

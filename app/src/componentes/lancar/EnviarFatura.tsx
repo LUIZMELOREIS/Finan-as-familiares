@@ -26,7 +26,9 @@ const FORMAS: Array<{ id: FormaPgto; nome: string }> = [
   { id: 'pix', nome: 'Pix' }, { id: 'débito', nome: 'Débito' }, { id: 'crédito', nome: 'Crédito' }, { id: 'dinheiro', nome: 'Dinheiro' }, { id: 'boleto', nome: 'Boleto' },
 ]
 
-export function EnviarFatura({ contasFixas, competenciaPadrao, avisar, aoSalvar, aoLer, autoAbrir }: {
+export function EnviarFatura({ contasFixas, competenciaPadrao, avisar, aoSalvar, aoLer, autoAbrir, arquivoInicial }: {
+  /** PDF ou imagem que chegou por compartilhamento de outro app: é lido ao montar. */
+  arquivoInicial?: File | null
   contasFixas: ContaFixa[]
   competenciaPadrao: string
   avisar: (texto: string, opcoes?: { tipo?: 'ok' | 'erro' | 'info' }) => void
@@ -45,6 +47,7 @@ export function EnviarFatura({ contasFixas, competenciaPadrao, avisar, aoSalvar,
   const m = <K extends keyof Campos>(k: K, v: string) => setC((a) => ({ ...a, [k]: v }))
   const ativas = contasFixas.filter((f) => f.ativa !== false)
   useEffect(() => { if (autoAbrir) inputRef.current?.click() }, [autoAbrir])
+  useEffect(() => { if (arquivoInicial) void aoEscolherArquivo(arquivoInicial) }, [arquivoInicial]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function escolherContaFixa(id: string) {
     const cf = ativas.find((f) => f.id === id)

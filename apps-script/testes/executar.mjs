@@ -416,6 +416,13 @@ teste('resumo: orçamento soma por tipo e por grupo', () => {
   assert.equal(r.por_tipo.t_variaveis.orcado, 1500); assert.equal(r.por_grupo.g_alimentacao.orcado, 1500); assert.equal(r.por_categoria.c_delivery.orcado, 300)
   assert.equal(r.por_usuario.u_nina, 129.8)
 })
+teste('resumo: receita prevista usa o Orçamento quando há salário planejado; senão, o mês anterior', () => {
+  const semPlano = g.calcularResumoMes(bancoTeste(), visaoAdmin, comp)
+  assert.equal(semPlano.por_tipo.t_receitas.orcado, 9000)
+  const d = bancoTeste()
+  d.orcamento.push({ competencia: comp, categoria_id: 'c_salario', valor_planejado: 12000 }, { competencia: comp, categoria_id: 'c_renda_extra', valor_planejado: 500 })
+  assert.equal(g.calcularResumoMes(d, visaoAdmin, comp).por_tipo.t_receitas.orcado, 12500)
+})
 teste('resumo: Dependente sem dependente_ve_salarios não vê salários', () => { assert.equal(g.calcularResumoMes(bancoTeste(), visaoDep, m(1)).entrou, 0) })
 teste('painel: meses futuros previstos (média 3 meses; dezembro ×1,5; despesas = orçamento sem aportes)', () => {
   const ano = Number(comp.slice(0, 4)) + 1
