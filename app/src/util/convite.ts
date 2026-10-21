@@ -31,7 +31,8 @@ export function decodificarConvite(texto: string | null | undefined): ConviteCom
   if (!texto) return null
   try {
     const obj = JSON.parse(new TextDecoder().decode(deBase64Url(texto.trim()))) as Partial<ConviteCompacto>
-    if (!obj || typeof obj !== 'object' || typeof obj.convite !== 'string' || !obj.convite) return null
+    if (!obj || typeof obj !== 'object' || typeof obj.convite !== 'string') return null
+    if (!obj.convite && !obj.familia) return null
     return { convite: obj.convite, perfil: obj.perfil, api: obj.api, familia: obj.familia, demo: obj.demo }
   } catch { return null }
 }

@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react'
 import type { Perfil, Usuario } from '../../tipos'
+import { codificarConvite } from '../../util/convite'
+import { lerSessao } from '../../api/cliente'
 import { api, arquivoParaBase64, comprimirImagem, emModoDemo } from '../../api/cliente'
 import { useBoot, useSessao } from '../../store/sessao'
 import { dataBr, moeda } from '../../util/formato'
@@ -173,6 +175,7 @@ export function Membros() {
       </div>
       <div className="flex flex-col gap-3.5">
         <Convite />
+      <OutroAparelho />
         <div className="card">
           <h3>Perfis <span className="sub">o que cada um pode fazer</span></h3>
           <div className="rows">
@@ -184,6 +187,32 @@ export function Membros() {
         </div>
       </div>
       {editando && <FolhaMembro usuario={editando} aoFechar={() => setEditando(null)} />}
+    </div>
+  )
+}
+
+/** Link para a própria pessoa (ou outro membro já cadastrado) entrar num aparelho novo com o PIN, sem convite. */
+function OutroAparelho() {
+  const sessao = lerSessao()
+  if (!sessao?.url_api) return null
+  const link = `${location.origin}${location.pathname}#/entrar?c=${codificarConvite({ convite: '', api: sessao.url_api, familia: sessao.token_familia })}`
+  const compartilhar = async () => {
+    try { await navigator.share({ title: 'Finanças da Família — outro aparelho', text: 'Abra no celular novo, escolha o seu nome e digite o seu PIN:', url: link }) } catch { /* cancelado */ }
+  }
+  return (
+    <div className="card">
+      <h3>Entrar em outro aparelho <span className="sub">quem já tem perfil</span></h3>
+      <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '0 0 10px' }}>Para o seu segundo celular, um tablet ou quando trocar de aparelho: abra este link lá, escolha o seu nome e digite o seu PIN. Não cria perfil novo e não precisa de convite.</p>
+      <div className="flex flex-col sm:flex-row gap-4 items-start">
+        <QrCode texto={link} tamanho={160} />
+        <div className="flex-1 min-w-0" style={{ width: '100%' }}>
+          <input className="campo" readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Link para outro aparelho" style={{ fontSize: 12 }} />
+          <div className="flex gap-2 mt-2 flex-wrap">
+            {'share' in navigator && <button className="btn btn-primary btn-sm" onClick={compartilhar}><Icone nome="share-2" />Compartilhar</button>}
+            <BotaoCopiar texto={link} rotulo="Copiar link" />
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

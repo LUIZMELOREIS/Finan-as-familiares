@@ -149,6 +149,7 @@ Mudanças da versão 2 (referência visual `referencia_visual.html`):
 | `salvar_patrimonio` | Administrador | `patrimonio` | `Patrimonio` |
 | `registrar_saldo_patrimonio` | Adulto | `id`, `competencia`, `valor` | `Patrimonio` |
 | `relatorio_mensal` | Adulto | `competencia` | `{ markdown, projecao: Array<{competencia, receitas, despesas, saldo}> }` |
+| `perfis_familia` | — (só token da família) | `{}` | `{ nome_familia, url_foto_capa, perfis: [{ id, apelido, nome, cor, avatar, perfil }] }` — para entrar em outro aparelho com PIN, sem convite |
 | `vincular_telegram` | Dependente | — | `{ codigo, url_bot }` (código de 6 dígitos para enviar ao bot) |
 
 ### Assistente — como funciona no servidor
