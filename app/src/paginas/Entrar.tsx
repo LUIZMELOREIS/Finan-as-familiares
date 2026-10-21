@@ -3,7 +3,7 @@
  * lema e PIN. Também recebe convites (?convite=), o modo demonstração e a conexão
  * do primeiro celular à API.
  */
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { Usuario } from '../tipos'
 import { api, type Sessao } from '../api/cliente'
@@ -16,6 +16,8 @@ import { Convite, type DadosConvite } from '../componentes/entrar/Convite'
 import { EscolherDemo } from '../componentes/entrar/EscolherDemo'
 import { ConectarApi } from '../componentes/entrar/ConectarApi'
 import { lerPerfis, lembrarPerfil, esquecerPerfis, type PerfilLembrado } from '../componentes/entrar/perfis'
+import { useInstalacao } from '../hooks/useInstalacao'
+import type { RespostaPerfis } from '../componentes/entrar/ConectarApi'
 import { decodificarConvite } from '../util/convite'
 import { URL_API_PADRAO } from '../familia'
 
@@ -40,6 +42,8 @@ export default function Entrar({ erro }: { erro?: string }) {
     : null)
   const [modo, setModo] = useState<Modo>(convite ? 'convite' : codigoConvite || familiaConvite ? 'api' : perfis.length ? 'perfis' : 'inicio')
   const [perfil, setPerfil] = useState<PerfilLembrado | null>(null)
+  const [conectando, setConectando] = useState(false)
+  const inst = useInstalacao()
   const [pin, setPin] = useState('')
   const [erroPin, setErroPin] = useState('')
   const [entrando, setEntrando] = useState(false)
@@ -48,6 +52,21 @@ export default function Entrar({ erro }: { erro?: string }) {
   const nomeFamilia = perfis[0]?.nome_familia || 'Finanças da Família'
   const nomeCurto = nomeFamilia.replace(/^Fam[ií]lia\s+/i, '')
   const tituloFamilia = perfis.length ? `Família ${nomeCurto}` : 'Finanças da Família'
+
+  // Link "outro aparelho" (família sem convite): busca os perfis sozinho e vai direto ao PIN.
+  useEffect(() => {
+    if (codigoConvite || !familiaConvite || !urlApiConvite) return
+    const base: Sessao = { url_api: urlApiConvite, token_familia: familiaConvite, token: '', usuario_id: '' }
+    setConectando(true)
+    api<RespostaPerfis>('perfis_familia', {}, base)
+      .then((r) => {
+        if (!r?.perfis?.length) return
+        setPerfis(r.perfis.map((u) => ({ usuario_id: u.id, apelido: u.apelido, nome: u.nome, cor: u.cor, avatar: u.avatar, url_api: base.url_api, token_familia: base.token_familia, nome_familia: r.nome_familia, url_foto_capa: r.url_foto_capa })))
+        setPerfil(null); setModo('perfis')
+      })
+      .catch(() => { /* fica na tela "Conectar à API", já preenchida */ })
+      .finally(() => setConectando(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Entra de fato: lembra o perfil, navega para "/" ANTES de chamar entrar() (o roteador remonta). */
   const concluir = useCallback((u: Pick<Usuario, 'id' | 'apelido' | 'nome' | 'cor' | 'avatar'>, sessao: Sessao, familia: { nome_familia?: string; url_foto_capa?: string }) => {
@@ -109,6 +128,8 @@ export default function Entrar({ erro }: { erro?: string }) {
               ))}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%', marginTop: 8 }}>
+              {!inst.instalado && inst.podeInstalar && <button type="button" className="btn btn-primary btn-block" onClick={() => void inst.instalar()}><Icone nome="download" />Instalar o app neste aparelho</button>}
+              {!inst.instalado && !inst.podeInstalar && <p className="sub" style={{ margin: 0 }}>{inst.ios ? 'Para instalar: Compartilhar → Adicionar à Tela de Início.' : 'Para instalar: menu ⋮ do navegador → Instalar app.'}</p>}
               <button type="button" className="btn btn-ghost btn-block" onClick={() => setModo('inicio')}>Outra forma de entrar</button>
               <button type="button" className="btn btn-sm" style={{ color: 'var(--muted)' }} onClick={esquecer}>Esquecer os perfis deste aparelho</button>
             </div>
@@ -143,7 +164,8 @@ export default function Entrar({ erro }: { erro?: string }) {
           />
         )}
 
-        {modo === 'api' && (
+        {modo === 'api' && conectando && <p className="sub">Conectando à família…</p>}
+        {modo === 'api' && !conectando && (
           <ConectarApi
             codigoInicial={codigoConvite}
             urlInicial={apiConvite || URL_API_PADRAO}
