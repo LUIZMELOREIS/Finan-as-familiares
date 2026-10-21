@@ -1,0 +1,24 @@
+{
+  "name": "familia-reis-light",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Protótipo (tema claro) do app de finanças da Família Reis: painel, extrato, leitura de recibos com IA e análise por membro.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lucide-react": "^1.59.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0"
+  }
+}

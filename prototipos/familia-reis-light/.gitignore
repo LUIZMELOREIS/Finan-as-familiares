@@ -1,0 +1,71 @@
+# ---------- Dependências ----------
+node_modules/
+.pnp
+.pnp.js
+.yarn/*
+!.yarn/releases
+!.yarn/plugins
+
+# ---------- Build e artefatos ----------
+dist/
+dist-ssr/
+build/
+dev-dist/
+.vite/
+*.tsbuildinfo
+coverage/
+playwright-report/
+test-results/
+storybook-static/
+
+# ---------- Variáveis de ambiente e segredos ----------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.keystore
+google-services.json
+GoogleService-Info.plist
+
+# ---------- Logs ----------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ---------- Editores e sistema ----------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+# ---------- Mobile (Capacitor / Expo, se vierem a ser usados) ----------
+ios/Pods/
+ios/build/
+android/.gradle/
+android/app/build/
+android/build/
+.expo/
+.expo-shared/
+*.ipa
+*.apk
+*.aab
+
+# ---------- Cache de ferramentas ----------
+.eslintcache
+.stylelintcache
+.cache/
+.parcel-cache/
+.turbo/

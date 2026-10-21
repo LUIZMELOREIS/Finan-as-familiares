@@ -1,0 +1,18 @@
+/* ==== DESIGN TOKENS — paleta clara da Família Reis ==== */
+:root {
+  --bg: #F8F9FA;            /* fundo do app */
+  --surface: #FFFFFF;       /* cartões */
+  --text: #212529;          /* texto principal (grafite) */
+  --muted: #6C757D;         /* texto secundário */
+  --line: #E9ECEF;          /* bordas suaves */
+  --green: #2D6A4F;         /* entradas, saldos positivos */
+  --green-soft: #E3F1E8;    /* fundo do card de entradas */
+  --red: #BA1A1A;           /* saídas, alertas */
+  --red-soft: #F9E3E3;      /* fundo do card de saídas */
+  --yellow: #E9C46A;        /* faixa intermediária do orçamento */
+  --blue: #005F73;          /* acento e botões primários */
+  --blue-2: #0A9396;        /* fim do gradiente do saldo */
+  --radius: 16px;
+  --shadow: 0 4px 16px rgba(33, 37, 41, 0.06);
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
