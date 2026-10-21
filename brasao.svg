@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="fundo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1E1F2B"/><stop offset="1" stop-color="#0D0E23"/></linearGradient>
+    <linearGradient id="ouro" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFE7A3"/><stop offset="0.55" stop-color="#F2C552"/><stop offset="1" stop-color="#A8782A"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#fundo)"/>
+  <g fill="url(#ouro)" fill-opacity="0.72">
+    <path d="M209.7 328.1A140.0 140.0 0 1 1 347.3 89.9A140.0 140.0 0 0 0 209.7 328.1Z"/>
+    <path d="M172.3 274.3A140.0 140.0 0 1 1 438.0 203.1A140.0 140.0 0 0 0 172.3 274.3Z"/>
+    <path d="M183.9 209.7A140.0 140.0 0 1 1 422.1 347.3A140.0 140.0 0 0 0 183.9 209.7Z"/>
+    <path d="M237.7 172.3A140.0 140.0 0 1 1 308.9 438.0A140.0 140.0 0 0 0 237.7 172.3Z"/>
+    <path d="M302.3 183.9A140.0 140.0 0 1 1 164.7 422.1A140.0 140.0 0 0 0 302.3 183.9Z"/>
+    <path d="M339.7 237.7A140.0 140.0 0 1 1 74.0 308.9A140.0 140.0 0 0 0 339.7 237.7Z"/>
+    <path d="M328.1 302.3A140.0 140.0 0 1 1 89.9 164.7A140.0 140.0 0 0 0 328.1 302.3Z"/>
+    <path d="M274.3 339.7A140.0 140.0 0 1 1 203.1 74.0A140.0 140.0 0 0 0 274.3 339.7Z"/>
+  </g>
+</svg>

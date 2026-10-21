@@ -1,0 +1,1 @@
+import{t as e}from"./react-EcYdfT9W.js";var t=e();function n({children:e}){return(0,t.jsx)(`span`,{className:`hidden md:flex gap-2`,children:e})}function r({children:e}){return(0,t.jsx)(`div`,{className:`md:hidden flex flex-col gap-2 nao-imprimir`,style:{marginTop:14},children:e})}export{n,r as t};
