@@ -3,9 +3,9 @@ import { useState } from 'react'
 import { api } from '../../api/cliente'
 import type { DadosConvite } from './Convite'
 
-export function ConectarApi({ aoConectar, aoCancelar, codigoInicial = '', perfil = 'Administrador' }: { aoConectar: (c: DadosConvite) => void; aoCancelar: () => void; codigoInicial?: string; perfil?: string }) {
-  const [url, setUrl] = useState('')
-  const [tokenFamilia, setTokenFamilia] = useState('')
+export function ConectarApi({ aoConectar, aoCancelar, codigoInicial = '', urlInicial = '', tokenInicial = '', perfil = 'Administrador' }: { aoConectar: (c: DadosConvite) => void; aoCancelar: () => void; codigoInicial?: string; urlInicial?: string; tokenInicial?: string; perfil?: string }) {
+  const [url, setUrl] = useState(urlInicial)
+  const [tokenFamilia, setTokenFamilia] = useState(tokenInicial)
   const [codigo, setCodigo] = useState(codigoInicial)
   const [erro, setErro] = useState('')
   const [testando, setTestando] = useState(false)
