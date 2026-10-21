@@ -87,5 +87,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
           publish_branch: gh-pages
-          force_orphan: true
+          # Mantém os arquivos das versões anteriores: quem ainda tem a página antiga aberta no celular
+          # continua achando os pedaços de código dela em vez de ver uma tela em branco.
+          keep_files: true
           commit_message: 'Publicar app ${{ github.sha }}'
