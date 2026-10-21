@@ -3,7 +3,7 @@
  * lema e PIN. Também recebe convites (?convite=), o modo demonstração e a conexão
  * do primeiro celular à API.
  */
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { Usuario } from '../tipos'
 import { api, type Sessao } from '../api/cliente'
