@@ -3,6 +3,7 @@ import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-d
 import { useSessao } from './store/sessao'
 import { Casca } from './componentes/Casca'
 import { Carregando } from './componentes/Carregando'
+import { LimiteDeErro } from './componentes/LimiteDeErro'
 
 // Carregamento preguiçoso: cada tela só é baixada quando aberta.
 const Painel = lazy(() => import('./paginas/Painel'))
@@ -44,6 +45,7 @@ export default function App() {
   return (
     <HashRouter>
       <RolarAoTopo />
+      <LimiteDeErro>
       <Suspense fallback={<Carregando />}>
         <Routes>
           <Route path="/entrar" element={<Entrar />} />
@@ -80,6 +82,7 @@ export default function App() {
           )}
         </Routes>
       </Suspense>
+      </LimiteDeErro>
     </HashRouter>
   )
 }

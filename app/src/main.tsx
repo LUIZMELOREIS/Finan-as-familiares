@@ -5,7 +5,11 @@ import App from './App.tsx'
 import { registerSW } from 'virtual:pwa-register'
 
 // Service worker: atualiza sozinho quando há versão nova.
-registerSW({ immediate: true })
+registerSW({
+  immediate: true,
+  // Procura versão nova de hora em hora enquanto o app fica aberto (o celular costuma manter o app dias sem recarregar).
+  onRegisteredSW(_url, registro) { if (registro) setInterval(() => registro.update().catch(() => {}), 60 * 60 * 1000) },
+})
 
 // Tela em branco depois de uma atualização: a página antiga tenta carregar um pedaço de código que já
 // não existe no servidor. Recarrega uma vez para pegar a versão nova (sem entrar em laço).
