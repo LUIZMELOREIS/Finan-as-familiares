@@ -122,9 +122,16 @@ function montarLinkConvite(codigo, perfil, urlApi, tokenFamilia) {
     '&api=' + encodeURIComponent(urlApi || '') + '&familia=' + encodeURIComponent(tokenFamilia || '');
 }
 
-/** URL pública deste App da Web (vazia se ainda não foi implantado). */
+/**
+ * URL pública deste App da Web (/exec). No editor, ScriptApp devolve a URL de teste (/dev), que exige login;
+ * nesse caso usamos a URL_API memorizada pela última requisição real (ou definida nas Script Properties).
+ */
 function urlDoAppWeb() {
-  try { return ScriptApp.getService().getUrl() || ''; } catch (e) { return ''; }
+  let atual = '';
+  try { atual = ScriptApp.getService().getUrl() || ''; } catch (e) { atual = ''; }
+  if (/\/exec$/.test(atual)) return atual;
+  const salva = propriedade('URL_API', '');
+  return salva || atual;
 }
 
 /**

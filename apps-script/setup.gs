@@ -208,7 +208,7 @@ function linkDeAcesso() {
     linhas.push(link);
     linhas.push('');
     linhas.push('No celular: Compartilhar → "Adicionar à Tela de Início" (iPhone) ou menu ⋮ → "Instalar app" (Android); depois escolha nome, foto e PIN.');
-    if (/\/dev$/.test(api)) linhas.push('Atenção: a URL da API terminou em /dev. Use a URL que termina em /exec (Implantar → Gerenciar implantações) no lugar dela.');
+    if (/\/dev$/.test(api)) linhas.push('Atenção: só conheço a URL de teste (/dev), que exige login. Abra uma vez no navegador a URL da implantação (Implantar → Gerenciar implantações, termina em /exec) e rode linkDeAcesso() de novo: a URL pública fica memorizada. Ou defina URL_API nas Propriedades do script.');
     linhas.push('');
     linhas.push('Se preferir digitar no app ("Já tenho a URL da API"):');
   }

@@ -238,6 +238,23 @@ teste('pastaRaiz usa a pasta escolhida pela família quando acessível e grava I
   assert.equal(g.pastaRaiz().getId(), 'nova:Finanças da Família Melo Reis')
   delete g.DriveApp; props.delete('ID_PASTA'); cache.delete('ID_PASTA')
 })
+teste('urlDoAppWeb prefere /exec e, no editor (/dev), usa a URL_API memorizada', () => {
+  props.delete('URL_API'); cache.delete('URL_API')
+  g.ScriptApp = { getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/ID/dev' }) }
+  assert.equal(g.urlDoAppWeb(), 'https://script.google.com/macros/s/ID/dev')
+  props.set('URL_API', 'https://script.google.com/macros/s/PUB/exec')
+  assert.equal(g.urlDoAppWeb(), 'https://script.google.com/macros/s/PUB/exec')
+  g.ScriptApp = { getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/NOVA/exec' }) }
+  assert.equal(g.urlDoAppWeb(), 'https://script.google.com/macros/s/NOVA/exec')
+  // memorizarUrlExec grava a URL pública vinda de uma requisição real
+  props.delete('URL_API'); cache.delete('URL_API')
+  g.memorizarUrlExec()
+  assert.equal(props.get('URL_API'), 'https://script.google.com/macros/s/NOVA/exec')
+  g.ScriptApp = { getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/ID/dev' }) }
+  props.delete('URL_API'); cache.delete('URL_API'); g.memorizarUrlExec()
+  assert.equal(props.has('URL_API'), false)
+  delete g.ScriptApp; cache.delete('URL_API')
+})
 teste('testarImplantacao distingue JSON público de página de login', () => {
   g.UrlFetchApp = { fetch: () => ({ getResponseCode: () => 200, getContentText: () => '{"ok":true,"dados":{"versao":"2"}}' }) }
   assert.equal(g.testarImplantacao('https://script.google.com/macros/s/X/exec').ok, true)

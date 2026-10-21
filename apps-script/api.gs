@@ -152,9 +152,26 @@ function extrairParametros(e, metodo) {
   return params;
 }
 
+/**
+ * Numa requisição real, ScriptApp.getService().getUrl() devolve a URL pública (/exec). Guardamos em URL_API
+ * para que linkDeAcesso() e os convites gerados no editor (onde a mesma chamada devolve a URL de teste /dev)
+ * usem sempre a URL certa.
+ */
+function memorizarUrlExec() {
+  try {
+    const atual = ScriptApp.getService().getUrl() || '';
+    if (!/\/exec$/.test(atual)) return;
+    const cache = CacheService.getScriptCache();
+    if (cache.get('URL_API') === atual) return;
+    if (propriedade('URL_API', '') !== atual) definirPropriedade('URL_API', atual);
+    cache.put('URL_API', atual, 21600);
+  } catch (erro) { /* nunca derruba a requisição por causa disso */ }
+}
+
 /** Decide entre webhook de SMS, webhook do Telegram e ação normal; nunca deixa uma exceção escapar sem envelope. */
 function tratarRequisicao(e, metodo) {
   try {
+    memorizarUrlExec();
     const parametrosUrl = (e && e.parameter) || {};
     // O Telegram envia o "update" como JSON no corpo; o sinal vem só na URL (?telegram=1).
     if (String(parametrosUrl.telegram || '') === '1') return { ok: true, dados: tratarWebhookTelegram(e, parametrosUrl), versao: VERSAO_API };
