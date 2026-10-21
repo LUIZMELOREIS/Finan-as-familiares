@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { GRADIENTE_OURO, OPACIDADE_PETALA, PETALAS } from './brasao/rosacea.gerado'
 
 /**
@@ -5,14 +6,17 @@ import { GRADIENTE_OURO, OPACIDADE_PETALA, PETALAS } from './brasao/rosacea.gera
  * usada no círculo da barra lateral, na capa e como base dos ícones do app.
  */
 export function BrasaoPadrao({ tamanho = 32 }: { tamanho?: number }) {
+  // Id único por instância: um gradiente definido dentro de um SVG oculto (ex.: barra lateral escondida
+  // no celular) não é renderizado, e todas as cópias com o mesmo id ficariam invisíveis.
+  const idGradiente = `brasao-ouro-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
   return (
     <svg viewBox="0 0 512 512" width={tamanho} height={tamanho} aria-hidden="true">
       <defs>
-        <linearGradient id="brasao-ouro" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id={idGradiente} x1="0" y1="0" x2="1" y2="1">
           {GRADIENTE_OURO.map(([offset, cor]) => <stop key={offset} offset={offset} stopColor={cor} />)}
         </linearGradient>
       </defs>
-      <g fill="url(#brasao-ouro)" fillOpacity={OPACIDADE_PETALA}>
+      <g fill={`url(#${idGradiente})`} fillOpacity={OPACIDADE_PETALA}>
         {PETALAS.map((d) => <path key={d} d={d} />)}
       </g>
     </svg>

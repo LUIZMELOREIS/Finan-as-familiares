@@ -227,7 +227,7 @@ export default function Lancar() {
       ) : (
         <div className="entry">
           <DadosDespesa
-            titulo={modo === 'foto' ? 'Dados lidos do cupom' : editando ? 'Dados do lançamento' : 'Dados da despesa'}
+            titulo={modo === 'foto' ? 'Dados lidos do cupom' : editando ? 'Dados do lançamento' : ehReceita ? 'Dados da receita' : 'Dados da despesa'}
             lido={lido}
             topo={modo === 'foto' ? <CapturaFoto aoLer={aoLerFoto} aoErro={(m) => avisar(m, { tipo: 'erro' })} autoAbrir={modoParam === 'foto' && !compartilhado} arquivoInicial={compartilhado} /> : modo === 'falar' ? <CapturaVoz aoTexto={aoTextoVoz} /> : undefined}
             rascunho={rascunho}
