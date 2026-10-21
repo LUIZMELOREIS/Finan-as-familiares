@@ -116,10 +116,15 @@ function criarConvite(perfil, criadoPor, usuarioId) {
   return convite;
 }
 
-/** Link que o convidado abre no celular: app publicado + convite + URL da API + token da família. */
+/**
+ * Link que o convidado abre no celular: app publicado + um único parâmetro `c` (base64url de um JSON com
+ * convite, perfil, URL da API e token da família). Sem `%`, `:` nem `&` no link, que apps de mensagem às
+ * vezes cortam ou alteram. O app também aceita a forma antiga (?convite=&perfil=&api=&familia=).
+ */
 function montarLinkConvite(codigo, perfil, urlApi, tokenFamilia) {
-  return obterUrlApp() + '#/entrar?convite=' + codigo + '&perfil=' + encodeURIComponent(perfil) +
-    '&api=' + encodeURIComponent(urlApi || '') + '&familia=' + encodeURIComponent(tokenFamilia || '');
+  const dados = { convite: codigo, perfil: perfil, api: urlApi || '', familia: tokenFamilia || '' };
+  const c = Utilities.base64EncodeWebSafe(JSON.stringify(dados), Utilities.Charset.UTF_8).replace(/=+$/, '');
+  return obterUrlApp() + '#/entrar?c=' + c;
 }
 
 /**

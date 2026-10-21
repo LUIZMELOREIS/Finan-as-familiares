@@ -16,6 +16,8 @@ import { Convite, type DadosConvite } from '../componentes/entrar/Convite'
 import { EscolherDemo } from '../componentes/entrar/EscolherDemo'
 import { ConectarApi } from '../componentes/entrar/ConectarApi'
 import { lerPerfis, lembrarPerfil, esquecerPerfis, type PerfilLembrado } from '../componentes/entrar/perfis'
+import { decodificarConvite } from '../util/convite'
+import { URL_API_PADRAO } from '../familia'
 
 type Modo = 'inicio' | 'perfis' | 'pin' | 'convite' | 'demo' | 'api'
 
@@ -24,10 +26,17 @@ export default function Entrar({ erro }: { erro?: string }) {
   const [sp] = useSearchParams()
   const entrar = useSessao((e) => e.entrar)
   const [perfis, setPerfis] = useState<PerfilLembrado[]>(lerPerfis)
-  const codigoConvite = sp.get('convite') ?? ''
-  const conviteDemo = sp.get('demo') === '1' || (!sp.get('api') && !!codigoConvite && !sp.get('familia'))
-  const [convite, setConvite] = useState<DadosConvite | null>(codigoConvite && (conviteDemo || sp.get('api'))
-    ? { codigo: codigoConvite, perfil: sp.get('perfil') || 'Adulto', url_api: conviteDemo ? '' : sp.get('api') || '', token_familia: conviteDemo ? 'demo' : sp.get('familia') || '' }
+  // Convite: parâmetros soltos (?convite=&perfil=&api=&familia=) ou compactos (?c=base64url).
+  const compacto = decodificarConvite(sp.get('c'))
+  const codigoConvite = (sp.get('convite') ?? compacto?.convite ?? '').toUpperCase()
+  const perfilConvite = sp.get('perfil') ?? compacto?.perfil ?? 'Adulto'
+  const apiConvite = sp.get('api') ?? compacto?.api ?? ''
+  const familiaConvite = sp.get('familia') ?? compacto?.familia ?? ''
+  const conviteDemo = (sp.get('demo') ?? compacto?.demo) === '1' || (!apiConvite && !familiaConvite && !!codigoConvite && !URL_API_PADRAO)
+  // Sem `api` no link, usa o endereço da família embutido no app (o link fica curto e difícil de quebrar).
+  const urlApiConvite = conviteDemo ? '' : apiConvite || URL_API_PADRAO
+  const [convite, setConvite] = useState<DadosConvite | null>(codigoConvite && (conviteDemo || (urlApiConvite && familiaConvite))
+    ? { codigo: codigoConvite, perfil: perfilConvite, url_api: urlApiConvite, token_familia: conviteDemo ? 'demo' : familiaConvite }
     : null)
   const [modo, setModo] = useState<Modo>(convite ? 'convite' : codigoConvite ? 'api' : perfis.length ? 'perfis' : 'inicio')
   const [perfil, setPerfil] = useState<PerfilLembrado | null>(null)
@@ -137,7 +146,9 @@ export default function Entrar({ erro }: { erro?: string }) {
         {modo === 'api' && (
           <ConectarApi
             codigoInicial={codigoConvite}
-            perfil={codigoConvite ? sp.get('perfil') || 'Adulto' : 'Administrador'}
+            urlInicial={apiConvite || URL_API_PADRAO}
+            tokenInicial={familiaConvite}
+            perfil={codigoConvite ? perfilConvite : 'Administrador'}
             aoCancelar={() => setModo(perfis.length ? 'perfis' : 'inicio')}
             aoConectar={(c) => { setConvite(c); setModo('convite') }}
           />
