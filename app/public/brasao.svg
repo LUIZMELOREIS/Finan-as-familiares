@@ -1,12 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="fundo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1E1F2B"/><stop offset="1" stop-color="#0D0E23"/></linearGradient>
-    <linearGradient id="ouro" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F7D97C"/><stop offset="1" stop-color="#D9A93A"/></linearGradient>
+    <linearGradient id="ouro" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFE7A3"/><stop offset="0.55" stop-color="#F2C552"/><stop offset="1" stop-color="#A8782A"/></linearGradient>
   </defs>
   <rect width="512" height="512" rx="112" fill="url(#fundo)"/>
-  <path d="M256 72 L404 118 V272 C404 356 338 414 256 448 C174 414 108 356 108 272 V118 Z" fill="#5B5BE0" stroke="url(#ouro)" stroke-width="12"/>
-  <path d="M256 72 L404 118 V272 C404 356 338 414 256 448 Z" fill="#BD55C7" opacity="0.9"/>
-  <rect x="236" y="150" width="40" height="190" rx="8" fill="url(#ouro)"/>
-  <rect x="176" y="200" width="160" height="40" rx="8" fill="url(#ouro)"/>
-  <path d="M150 372 Q256 332 362 372" stroke="url(#ouro)" stroke-width="22" fill="none" stroke-linecap="round"/>
+  <g fill="url(#ouro)" fill-opacity="0.72">
+    <path d="M209.7 328.1A140.0 140.0 0 1 1 347.3 89.9A140.0 140.0 0 0 0 209.7 328.1Z"/>
+    <path d="M172.3 274.3A140.0 140.0 0 1 1 438.0 203.1A140.0 140.0 0 0 0 172.3 274.3Z"/>
+    <path d="M183.9 209.7A140.0 140.0 0 1 1 422.1 347.3A140.0 140.0 0 0 0 183.9 209.7Z"/>
+    <path d="M237.7 172.3A140.0 140.0 0 1 1 308.9 438.0A140.0 140.0 0 0 0 237.7 172.3Z"/>
+    <path d="M302.3 183.9A140.0 140.0 0 1 1 164.7 422.1A140.0 140.0 0 0 0 302.3 183.9Z"/>
+    <path d="M339.7 237.7A140.0 140.0 0 1 1 74.0 308.9A140.0 140.0 0 0 0 339.7 237.7Z"/>
+    <path d="M328.1 302.3A140.0 140.0 0 1 1 89.9 164.7A140.0 140.0 0 0 0 328.1 302.3Z"/>
+    <path d="M274.3 339.7A140.0 140.0 0 1 1 203.1 74.0A140.0 140.0 0 0 0 274.3 339.7Z"/>
+  </g>
 </svg>

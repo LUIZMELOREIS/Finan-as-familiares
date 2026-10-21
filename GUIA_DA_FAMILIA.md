@@ -18,6 +18,8 @@ Toque no botão **[+]** no centro da barra de baixo (ou em **Lançar despesa**) 
 | **Falar** | "Gastei 45 na padaria no Pix". | No iPhone, use o microfone do teclado. Também funciona no Assistente. |
 
 - Crédito parcelado: escolha o cartão e o número de parcelas; o app distribui nos meses certos.
+- **Receita** (salário, renda extra, aluguel recebido, reembolso): no Lançar, toque em **Receita** no topo, digite o valor e escolha a categoria. O salário previsto do mês fica em **Configurações → Orçamento → aba Receitas**.
+- **Veio pelo WhatsApp ou pelo app da luz/água?** Abra o PDF ou a foto, toque em **Compartilhar** e escolha **Finanças da Família**: o app já abre lendo o arquivo. (Android; no iPhone, salve o arquivo e use "Enviar fatura".)
 - Errou? **Desfazer** nos 5 segundos seguintes, ou apague na lista do card.
 
 ## 3. Caixa de entrada (compras que o app capturou sozinho)

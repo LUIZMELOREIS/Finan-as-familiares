@@ -8,10 +8,12 @@ import type { LeituraExtraida } from '../../tipos'
 import { Icone } from '../Icone'
 import { ehUrlNfce, lerQrCode } from './comuns'
 
-export function CapturaFoto({ aoLer, aoErro, autoAbrir }: {
+export function CapturaFoto({ aoLer, aoErro, autoAbrir, arquivoInicial }: {
   aoLer: (leitura: LeituraExtraida, previa: string) => void
   aoErro: (mensagem: string) => void
   autoAbrir?: boolean
+  /** Imagem que chegou por compartilhamento de outro app: é processada ao montar. */
+  arquivoInicial?: File | null
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [previa, setPrevia] = useState<string | null>(null)
@@ -19,6 +21,7 @@ export function CapturaFoto({ aoLer, aoErro, autoAbrir }: {
   const [mensagem, setMensagem] = useState('')
 
   useEffect(() => { if (autoAbrir) inputRef.current?.click() }, [autoAbrir])
+  useEffect(() => { if (arquivoInicial) void processar(arquivoInicial) }, [arquivoInicial]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function processar(arquivo: File) {
     setLendo(true)

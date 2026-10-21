@@ -5,6 +5,7 @@
 const CSS = [
   // botões da topbar que a referência esconde no celular (`.topbar .btn{display:none}`)
   '@media (max-width:760px){.topbar .acoes .so-desktop{display:none}}',
+  '@media (min-width:761px){.so-celular{display:none !important}}',
   // três cards de tipo (visão do Dependente): 3 colunas no computador, 2 no tablet/celular
   '.groups.groups-3{grid-template-columns:repeat(3,1fr)}',
   '@media (max-width:1180px){.groups.groups-3{grid-template-columns:repeat(2,1fr)}}',

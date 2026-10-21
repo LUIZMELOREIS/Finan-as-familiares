@@ -115,7 +115,8 @@ function TelaTipo({ id }: { id: string }) {
   return (
     <>
       <EstilosLocais />
-      <Cabecalho titulo={tipo.nome} subtitulo={subtitulo} voltarPara="/" acoes={<Link className="btn btn-primary so-desktop" to="/lancar"><Icone nome="circle-plus" />Lançar</Link>} />
+      <Cabecalho titulo={tipo.nome} subtitulo={subtitulo} voltarPara="/" acoes={<Link className="btn btn-primary so-desktop" to={tipo.id === 't_receitas' ? '/lancar?tipo=t_receitas&modo=digitar' : '/lancar'}><Icone nome="circle-plus" />{tipo.id === 't_receitas' ? 'Lançar receita' : 'Lançar'}</Link>} />
+      {tipo.id === 't_receitas' && <Link className="btn btn-primary btn-block so-celular" to="/lancar?tipo=t_receitas&modo=digitar" style={{ marginBottom: 14 }}><Icone nome="circle-plus" />Lançar receita (salário, renda extra…)</Link>}
 
       {erro && <div className="card" style={{ marginBottom: 14, fontSize: 13, display: 'flex', gap: 10, alignItems: 'center' }}><Icone nome="circle-alert" style={{ color: 'var(--red)' }} />{erro}<button type="button" className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setVersao((v) => v + 1)}>Tentar de novo</button></div>}
       {!resumo && !erro && <Carregando />}

@@ -108,6 +108,7 @@ export function Orcamento() {
         <div className="tabs" role="tablist">
           {tipos.map((t) => <button key={t.id} role="tab" aria-selected={aba === t.id} onClick={() => setAba(t.id as typeof aba)}>{t.nome}</button>)}
         </div>
+        {aba === 't_receitas' && <p className="sub" style={{ margin: '0 0 10px' }}>Informe aqui o salário e as outras entradas previstas do mês. O Painel usa esses valores como "Previsto" das receitas; sem eles, usa o que entrou no mês anterior.</p>}
         {carregando ? <Carregando texto="Lendo o orçamento…" /> : grupos.map((g) => (
           <div key={g.id} className="menu-group" style={{ ['--c' as string]: corVar(g.cor) }}>
             <h4>{g.nome}</h4>

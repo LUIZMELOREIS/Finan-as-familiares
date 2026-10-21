@@ -75,7 +75,7 @@ export function DadosDespesa({ titulo, lido, topo, rascunho, aoMudar, cartoes, u
         <input id="data" className="num" value={dataTexto} inputMode="numeric" placeholder="dd/mm/aaaa" onChange={(e) => mudarData(e.target.value)} onBlur={() => setDataTexto(dataBr(r.data))} />
       </div>
       <div className="field">
-        <label id="rot-forma">Forma de pagamento</label>
+        <label id="rot-forma">{ehReceita ? 'Forma de recebimento' : 'Forma de pagamento'}</label>
         <div className="seg" role="group" aria-labelledby="rot-forma" style={formas.length > 4 ? { gridTemplateColumns: `repeat(${formas.length}, 1fr)` } : undefined}>
           {formas.map((f) => <button key={f.id} type="button" aria-pressed={r.forma_pgto === f.id} onClick={() => mudarForma(f.id)}>{f.nome}</button>)}
         </div>

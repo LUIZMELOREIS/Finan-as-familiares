@@ -122,12 +122,14 @@ function calcularResumoMes(d, visao, comp, filtroUsuario) {
       if (c.tipo_id) r.por_tipo[c.tipo_id].orcado += o.valor_planejado;
     }
   });
-  // Receita prevista = receitas confirmadas do mês anterior (ou média dos 3 anteriores).
+  // Receita prevista = o que foi planejado no Orçamento para as categorias de receita (salário etc.);
+  // sem planejamento, receitas confirmadas do mês anterior (ou média dos 3 anteriores).
   const todas = lancamentosVisiveis(d, visao).filter((l) => l.tipo === 'receita' && l.status === 'confirmado');
   const recAnt = somar(todas.filter((l) => l.competencia === somarMeses(comp, -1)), (l) => l.valor);
   const rec3 = media([1, 2, 3].map((k) => somar(todas.filter((l) => l.competencia === somarMeses(comp, -k)), (l) => l.valor)));
   garantirTipo(TIPO_RECEITAS);
-  r.por_tipo[TIPO_RECEITAS].orcado = arredondar(recAnt || rec3);
+  const receitaPlanejada = r.por_tipo[TIPO_RECEITAS].orcado;
+  r.por_tipo[TIPO_RECEITAS].orcado = receitaPlanejada > 0 ? arredondar(receitaPlanejada) : arredondar(recAnt || rec3);
 
   ls.forEach((l) => {
     const c = catMap[l.categoria_id];

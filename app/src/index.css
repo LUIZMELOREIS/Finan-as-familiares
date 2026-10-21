@@ -80,7 +80,7 @@ svg.i { width: 18px; height: 18px; stroke-width: 1.75; flex: none; }
 .brand { display: flex; gap: 12px; align-items: center; }
 .crest { width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(145deg, #2A2B5E, #16173A); border: 1.5px solid var(--gold); display: grid; place-items: center; flex: none; overflow: hidden; }
 .crest svg, .crest img { width: 100%; height: 100%; object-fit: cover; }
-.crest svg { width: 30px; height: 30px; }
+.crest svg { width: 34px; height: 34px; }
 .brand h1 { font-size: 15px; font-weight: 700; line-height: 1.2; margin: 0; color: #fff; }
 .brand small { display: block; color: #8E90A2; font-size: 11.5px; font-weight: 400; }
 .verse { font-size: 11.5px; color: #8E90A2; font-style: italic; border-left: 2px solid var(--gold); padding-left: 10px; line-height: 1.5; margin: 0; }
@@ -203,7 +203,7 @@ svg.chart { width: 100%; height: auto; display: block; }
 .seg button[aria-pressed='true'] { background: var(--indigo); border-color: var(--indigo); color: #fff; }
 .tabs { display: flex; gap: 4px; background: var(--card-2); padding: 4px; border-radius: 10px; width: max-content; max-width: 100%; margin-bottom: 14px; overflow-x: auto; scrollbar-width: none; }
 .tabs button { padding: 6px 14px; border-radius: 7px; font-size: 13px; color: var(--muted); white-space: nowrap; min-height: 36px; }
-.tabs button[aria-selected='true'] { background: var(--indigo); color: #fff; }
+.tabs button[aria-selected='true'], .tabs button[aria-checked='true'] { background: var(--indigo); color: #fff; }
 .menu-group { margin-bottom: 16px; }
 .menu-group h4 { font-size: 12.5px; font-weight: 500; color: #C9CAD6; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
 :root[data-tema='claro'] .menu-group h4 { color: var(--text); }
@@ -271,7 +271,7 @@ svg.chart { width: 100%; height: auto; display: block; }
 .capa .veu { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(13, 14, 35, .55), rgba(13, 14, 35, .92)); }
 .capa .conteudo { position: relative; width: min(420px, 92vw); display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; padding: 32px 0; }
 .capa .crest { width: 84px; height: 84px; }
-.capa .crest svg { width: 54px; height: 54px; }
+.capa .crest svg { width: 62px; height: 62px; }
 .capa h1 { font-size: 22px; font-weight: 700; margin: 0; color: #fff; }
 .capa .verse { border-left: 0; padding: 0; text-align: center; font-size: 12.5px; }
 .pin-dots { display: flex; gap: 14px; justify-content: center; margin: 6px 0; }

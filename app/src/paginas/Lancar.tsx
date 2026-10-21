@@ -12,6 +12,7 @@ import { competenciaDosFiltros, useBoot, useSessao } from '../store/sessao'
 import type { Categoria, ContaAPagar, Lancamento, LeituraExtraida, OrigemLancamento, RegraLoja } from '../tipos'
 import { dataBr, moeda } from '../util/formato'
 import { extrairDeTexto } from '../util/extrator'
+import { lerCompartilhado } from '../util/compartilhado'
 import { Cabecalho } from '../componentes/Cabecalho'
 import { Icone } from '../componentes/Icone'
 import { useLancarFrequentes } from '../hooks/useLancarFrequentes'
@@ -50,7 +51,8 @@ export default function Lancar() {
   const modoParam = params.get('modo') as Modo | null
   const ehDependente = usuario.perfil === 'Dependente'
 
-  const [modo, setModo] = useState<Modo>(() => (editando ? 'digitar' : modoParam && MODOS.includes(modoParam) && !(modoParam === 'fatura' && ehDependente) ? modoParam : 'foto'))
+  const [modo, setModo] = useState<Modo>(() => (editando ? 'digitar' : modoParam && MODOS.includes(modoParam) && !(modoParam === 'fatura' && ehDependente) ? modoParam : params.get('tipo') === 't_receitas' ? 'digitar' : 'foto'))
+  const [compartilhado, setCompartilhado] = useState<File | null>(null)
   const [rascunho, setRascunho] = useState<Rascunho>(() => (editando ? rascunhoDeLancamento(lancamentoEdicao) : rascunhoVazio(usuario.id, origemDe(modo))))
   const [sugestao, setSugestao] = useState<string | undefined>(() => (editando ? lancamentoEdicao.categoria_id : undefined))
   const [aba, setAba] = useState<AbaCardapio>(() => (editando ? abaDe(categorias.find((c) => c.id === lancamentoEdicao.categoria_id)) : params.get('tipo') === 't_receitas' ? 't_receitas' : 't_variaveis'))
@@ -63,6 +65,33 @@ export default function Lancar() {
   const categoria = useMemo(() => categorias.find((c) => c.id === rascunho.categoria_id), [categorias, rascunho.categoria_id])
   const categoriaSugerida = useMemo(() => categorias.find((c) => c.id === sugestao), [categorias, sugestao])
   const ehReceita = categoria ? categoria.tipo === 'receita' : aba === 't_receitas'
+
+  // Arquivo ou texto que chegou pelo "Compartilhar" de outro app (WhatsApp, app da luz, da água…).
+  useEffect(() => {
+    if (params.get('compartilhado') !== '1' || editando) return
+    let cancelado = false
+    lerCompartilhado().then(({ arquivo, texto }) => {
+      if (cancelado) return
+      if (arquivo && arquivo.type === 'application/pdf') {
+        if (ehDependente) { avisar('Faturas em PDF são lançadas por um adulto da família.', { tipo: 'info' }); return }
+        setModo('fatura'); setCompartilhado(arquivo)
+      } else if (arquivo && arquivo.type.startsWith('image/')) {
+        setModo('foto'); mudar({ origem: 'foto' }); setCompartilhado(arquivo)
+      } else if (texto) {
+        setModo('falar'); aoTextoVoz(texto)
+      } else {
+        avisar('Não recebi nenhum arquivo. Compartilhe de novo escolhendo o Finanças da Família.', { tipo: 'info' })
+      }
+    })
+    return () => { cancelado = true }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Alterna entre lançar despesa e receita: muda a aba do cardápio e limpa a categoria se não combinar. */
+  function escolherNatureza(receita: boolean) {
+    setAba(receita ? 't_receitas' : 't_variaveis')
+    if (categoria && (categoria.tipo === 'receita') !== receita) mudar({ categoria_id: '' })
+    if (receita && (modo === 'fatura' || modo === 'foto')) mudarModo('digitar')
+  }
 
   // ?editar= sem o lançamento no state (recarregou a página): volta ao Painel.
   useEffect(() => { if (editarId && !lancamentoEdicao) nav('/', { replace: true }) }, [editarId, lancamentoEdicao, nav])
@@ -157,9 +186,16 @@ export default function Lancar() {
 
   return (
     <>
-      <Cabecalho titulo={editando ? 'Editar lançamento' : 'Lançar despesa'} subtitulo={editando ? 'Corrija o que for preciso e salve.' : 'Escolha como lançar. O tipo de despesa vem do cardápio abaixo.'} voltarPara={editando ? '' : undefined} />
+      <Cabecalho titulo={editando ? 'Editar lançamento' : ehReceita ? 'Lançar receita' : 'Lançar despesa'} subtitulo={editando ? 'Corrija o que for preciso e salve.' : ehReceita ? 'Salário, renda extra, aluguel recebido, reembolso… A categoria vem do cardápio abaixo.' : 'Escolha como lançar. O tipo de despesa vem do cardápio abaixo.'} voltarPara={editando ? '' : undefined} />
 
-      {!editando && (
+      {!editando && !pronto && (
+        <div className="tabs" role="radiogroup" aria-label="Natureza do lançamento" style={{ maxWidth: 360 }}>
+          <button type="button" role="radio" aria-checked={!ehReceita} onClick={() => escolherNatureza(false)}><Icone nome="arrow-down" tamanho={16} /> Despesa</button>
+          <button type="button" role="radio" aria-checked={ehReceita} onClick={() => escolherNatureza(true)}><Icone nome="arrow-up" tamanho={16} /> Receita</button>
+        </div>
+      )}
+
+      {!editando && !ehReceita && (
         <div className="methods">
           {metodos.map((m) => (
             <button key={m.id} type="button" className="method" aria-pressed={modo === m.id} onClick={() => mudarModo(m.id)}>
@@ -185,15 +221,15 @@ export default function Lancar() {
         <div className="entry" style={{ gridTemplateColumns: 'minmax(0, 640px)' }}>
           <div className="card">
             <h3>Dados lidos da fatura <span className="sub">PDF ou foto</span></h3>
-            <EnviarFatura contasFixas={contas_fixas} competenciaPadrao={competenciaDosFiltros(filtros)} avisar={avisar} aoSalvar={aoSalvarFatura} autoAbrir={modoParam === 'fatura'} />
+            <EnviarFatura contasFixas={contas_fixas} competenciaPadrao={competenciaDosFiltros(filtros)} avisar={avisar} aoSalvar={aoSalvarFatura} autoAbrir={modoParam === 'fatura' && !compartilhado} arquivoInicial={compartilhado} />
           </div>
         </div>
       ) : (
         <div className="entry">
           <DadosDespesa
-            titulo={modo === 'foto' ? 'Dados lidos do cupom' : editando ? 'Dados do lançamento' : 'Dados da despesa'}
+            titulo={modo === 'foto' ? 'Dados lidos do cupom' : editando ? 'Dados do lançamento' : ehReceita ? 'Dados da receita' : 'Dados da despesa'}
             lido={lido}
-            topo={modo === 'foto' ? <CapturaFoto aoLer={aoLerFoto} aoErro={(m) => avisar(m, { tipo: 'erro' })} autoAbrir={modoParam === 'foto'} /> : modo === 'falar' ? <CapturaVoz aoTexto={aoTextoVoz} /> : undefined}
+            topo={modo === 'foto' ? <CapturaFoto aoLer={aoLerFoto} aoErro={(m) => avisar(m, { tipo: 'erro' })} autoAbrir={modoParam === 'foto' && !compartilhado} arquivoInicial={compartilhado} /> : modo === 'falar' ? <CapturaVoz aoTexto={aoTextoVoz} /> : undefined}
             rascunho={rascunho}
             aoMudar={mudar}
             cartoes={cartoes}
@@ -211,7 +247,7 @@ export default function Lancar() {
               <p>
                 {podeConfirmar
                   ? <>Lançar <b className="num">{moeda(rascunho.valor)}</b> em <b>{categoria!.nome}</b>{rascunho.parcelas > 1 && rascunho.forma_pgto === 'crédito' && !editando && <> · <span className="num">{rascunho.parcelas}x</span></>}</>
-                  : !rascunho.valor ? 'Informe o valor para continuar.' : 'Escolha a despesa no cardápio.'}
+                  : !rascunho.valor ? 'Informe o valor para continuar.' : ehReceita ? 'Escolha a receita no cardápio.' : 'Escolha a despesa no cardápio.'}
               </p>
               <button type="button" className="btn btn-primary" onClick={confirmar} disabled={!podeConfirmar || salvando}>
                 <Icone nome="check" />{salvando ? 'Salvando…' : editando ? 'Salvar alterações' : 'Confirmar lançamento'}
