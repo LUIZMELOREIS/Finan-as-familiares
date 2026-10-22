@@ -201,6 +201,14 @@ teste('extrairDeTextoOcr conta de luz', () => {
   const r = g.extrairDeTextoOcr('COPEL DISTRIBUICAO S.A.\nCNPJ: 04.368.898/0001-06\nReferência: 09/2026\nConsumo 328 kWh\nVencimento: 10/10/2026\nTOTAL A PAGAR R$ 312,47\n83640000003 1 12470138000 0 00000012345 6 78901234567 8', 'conta')
   assert.equal(r.valor, 312.47); assert.equal(r.vencimento, '2026-10-10'); assert.equal(r.competencia, '2026-09'); assert.equal(r.consumo_valor, 328); assert.equal(r.consumo_unidade, 'kWh'); assert.ok(r.linha_digitavel.length > 40); assert.equal(r.cnpj, '04.368.898/0001-06')
 })
+teste('lerDocumento: sem chave do Claude, usa o texto extraído no aparelho em vez do OCR do Drive', () => {
+  const lerAbaOriginal = ctx.lerAba
+  ctx.lerAba = (aba) => (aba === 'Categorias' ? g.dadosIniciaisCategorias() : [])
+  try {
+    const r = g.lerDocumento('', 'application/pdf', 'conta', { getName: () => 'x.pdf' }, { ehDependente: false, config: {} }, 'COPEL DISTRIBUICAO S.A.\nReferência: 09/2026\nVencimento: 10/10/2026\nTOTAL A PAGAR R$ 312,47')
+    assert.equal(r.valor, 312.47); assert.equal(r.vencimento, '2026-10-10'); assert.equal(r.competencia, '2026-09'); assert.equal(r.origem_leitura, 'regex'); assert.equal(r.categoria_id, 'c_luz')
+  } finally { ctx.lerAba = lerAbaOriginal }
+})
 teste('extrairDeTextoOcr cupom usa o maior valor se não achar TOTAL', () => { const r = g.extrairDeTextoOcr('PADARIA PAO QUENTE\n17/10/2026 08:12\nPAO 18,90\nLEITE 11,80\nCAFE 32,00', 'cupom'); assert.equal(r.valor, 32); assert.equal(r.data, '2026-10-17') })
 teste('extrairDadosNfce', () => {
   const html = '<div id="u20" class="txtTopo">PADARIA PAO QUENTE LTDA</div><div>CNPJ: 12.345.678/0001-90</div><label>Valor a pagar R$:</label><span class="totalNumb txtMax">87,40</span> Emissão: 17/10/2026 08:12:33 Cartão de Débito'

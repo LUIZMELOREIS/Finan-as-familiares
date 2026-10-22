@@ -251,9 +251,11 @@ function nomeArquivoLeitura(tipo, mime, nomeOriginal) {
 
 /**
  * Lê um documento (cupom, conta ou fatura) tentando Claude e caindo para OCR+regex.
+ * `textoExtraido` é o texto que o app já tirou do PDF no aparelho: sem chave do Claude,
+ * dispensa o OCR do Drive (que exige o serviço avançado) e vai direto para as regras.
  * @returns LeituraExtraida (sem anexo_url; quem chama acrescenta)
  */
-function lerDocumento(base64, mime, tipo, blob, ctx) {
+function lerDocumento(base64, mime, tipo, blob, ctx, textoExtraido) {
   const contasFixas = tipo === 'conta' ? lerAba('ContasFixas').filter((c) => c.ativa) : [];
   let leitura = null;
   if (claudeDisponivel()) {
@@ -270,8 +272,9 @@ function lerDocumento(base64, mime, tipo, blob, ctx) {
   let textoOcr = '';
   if (!leitura) {
     try {
-      textoOcr = ocrDrive(blob);
+      textoOcr = String(textoExtraido || '').trim().length >= 30 ? String(textoExtraido) : ocrDrive(blob);
       leitura = extrairDeTextoOcr(textoOcr, tipo);
+      if (textoExtraido && textoOcr === String(textoExtraido)) leitura.origem_leitura = 'regex';
       if (tipo === 'fatura_cartao') { leitura.compras = comprasDeTextoOcr(textoOcr); leitura.confianca = leitura.compras.length ? 0.4 : 0.1; }
     } catch (e) {
       console.warn('OCR do Drive indisponível: ' + e.message);
@@ -329,7 +332,7 @@ function acaoLerImagem(p, ctx) {
   const tipo = ['cupom', 'conta', 'fatura_cartao'].indexOf(p.tipo) >= 0 ? p.tipo : 'cupom';
   const blob = Utilities.newBlob(Utilities.base64Decode(base64), mime, nomeArquivoLeitura(tipo, mime, p.nome_arquivo));
   const salvo = salvarArquivoLeitura(blob, tipo, blob.getName());
-  const leitura = lerDocumento(base64, mime, tipo, blob, ctx);
+  const leitura = lerDocumento(base64, mime, tipo, blob, ctx, String(p.texto_extraido || '').slice(0, 20000));
   leitura.anexo_url = salvo.url;
   return leitura;
 }

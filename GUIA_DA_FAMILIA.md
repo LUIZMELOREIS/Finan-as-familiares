@@ -13,13 +13,14 @@ Toque no botão **[+]** no centro da barra de baixo (ou em **Lançar despesa**) 
 | | Como | Dica |
 |---|---|---|
 | **Fotografar cupom** | Aponte para o cupom. O app lê valor, data e loja e já marca a despesa certa no cardápio. | Confira e toque em **Confirmar lançamento**. |
-| **Enviar fatura** | Luz, água, internet, cartão — PDF ou foto. | Vira conta a pagar com código de barras para copiar. |
+| **Enviar fatura** | Luz, água, internet, cartão — PDF ou foto. O PDF é lido no próprio celular (empresa, valor, vencimento, código de barras, consumo). | Vira conta a pagar com código de barras para copiar. Na 1ª vez de cada conta, escolha **➕ Nova conta fixa…** e ela passa a aparecer todo mês. |
 | **Digitar** | Valor → despesa no cardápio → confirmar. | Três toques. "Mais usados por você" fica no topo. |
 | **Falar** | "Gastei 45 na padaria no Pix". | No iPhone, use o microfone do teclado. Também funciona no Assistente. |
 
 - Crédito parcelado: escolha o cartão e o número de parcelas; o app distribui nos meses certos.
 - **Receita** (salário, renda extra, aluguel recebido, reembolso): no Lançar, toque em **Receita** no topo, digite o valor e escolha a categoria. O salário previsto do mês fica em **Configurações → Orçamento → aba Receitas**.
 - **Veio pelo WhatsApp ou pelo app da luz/água?** Abra o PDF ou a foto, toque em **Compartilhar** e escolha **Finanças da Família**: o app já abre lendo o arquivo. (Android; no iPhone, salve o arquivo e use "Enviar fatura".)
+- **Foto de conta** (não PDF) só é lida se o administrador configurou a `CHAVE_API_CLAUDE` no servidor; sem ela, prefira o PDF ou digite os campos.
 - Errou? **Desfazer** nos 5 segundos seguintes, ou apague na lista do card.
 
 ## 3. Caixa de entrada (compras que o app capturou sozinho)
