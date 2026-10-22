@@ -222,12 +222,12 @@ teste('gerarCodigoConvite tem 6 caracteres sem 0/O/1/I', () => { for (let i = 0;
 teste('montarLinkConvite usa o app publicado por padrão e um só parâmetro c (base64url)', () => {
   props.delete('URL_APP')
   const u = g.montarLinkConvite('ABC234', 'Administrador', 'https://script.google.com/macros/s/X/exec', 'tok&1')
-  assert.ok(u.startsWith('https://luizmeloreis.github.io/Finan-as-familiares/#/entrar?c='))
+  assert.ok(u.startsWith('https://luizmeloreis.github.io/Finan-as-familiares/?c='))
   const c = u.split('?c=')[1]
   assert.match(c, /^[A-Za-z0-9_-]+$/)
   assert.deepEqual(JSON.parse(Buffer.from(c, 'base64url').toString('utf8')), { convite: 'ABC234', perfil: 'Administrador', api: 'https://script.google.com/macros/s/X/exec', familia: 'tok&1' })
   props.set('URL_APP', 'https://exemplo.com/app/')
-  assert.ok(g.montarLinkConvite('ABC234', 'Adulto', '', '').startsWith('https://exemplo.com/app/#/entrar?c='))
+  assert.ok(g.montarLinkConvite('ABC234', 'Adulto', '', '').startsWith('https://exemplo.com/app/?c='))
   props.delete('URL_APP')
 })
 teste('pastaRaiz usa a pasta escolhida pela família quando acessível e grava ID_PASTA', () => {

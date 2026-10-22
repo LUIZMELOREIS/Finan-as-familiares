@@ -23,6 +23,15 @@ window.addEventListener('vite:preloadError', (evento) => {
   window.location.reload()
 })
 
+// Links que chegam com os dados ANTES do # (ex.: .../?c=XXXX). WhatsApp, e-mail e alguns apps cortam ou
+// alteram o que vem depois do #, então o convite e o "outro aparelho" usam esta forma; aqui viram a rota.
+{
+  const q = new URLSearchParams(window.location.search)
+  if (q.has('c') || q.has('convite')) {
+    window.history.replaceState(null, '', `${window.location.pathname}#/entrar?${q.toString()}`)
+  }
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

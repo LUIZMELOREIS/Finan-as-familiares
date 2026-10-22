@@ -130,13 +130,13 @@ function criarConvite(perfil, criadoPor, usuarioId) {
 
 /**
  * Link que o convidado abre no celular: app publicado + um único parâmetro `c` (base64url de um JSON com
- * convite, perfil, URL da API e token da família). Sem `%`, `:` nem `&` no link, que apps de mensagem às
- * vezes cortam ou alteram. O app também aceita a forma antiga (?convite=&perfil=&api=&familia=).
+ * convite, perfil, URL da API e token da família), colocado ANTES do # (apps de mensagem cortam ou alteram o
+ * que vem depois do # e os `&`). O app converte para a rota #/entrar e ainda aceita a forma antiga.
  */
 function montarLinkConvite(codigo, perfil, urlApi, tokenFamilia) {
   const dados = { convite: codigo, perfil: perfil, api: urlApi || '', familia: tokenFamilia || '' };
   const c = Utilities.base64EncodeWebSafe(JSON.stringify(dados), Utilities.Charset.UTF_8).replace(/=+$/, '');
-  return obterUrlApp() + '#/entrar?c=' + c;
+  return obterUrlApp() + '?c=' + c;
 }
 
 /**
