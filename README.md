@@ -43,7 +43,7 @@ Você precisa só de uma **conta Google** (Gmail). O app já está publicado em 
 
 **Passo 3 — Publicar e pegar o link.** Clique em **Implantar → Nova implantação → ⚙️ → App da Web**. Preencha **Executar como: Eu** e **Quem pode acessar: Qualquer pessoa** → **Implantar** (autorize de novo se pedir). **Copie a URL do App da Web** (termina em `/exec`), clique em **Concluído** e **abra essa URL uma vez no navegador**: deve aparecer um texto começando com `{"ok":true`. Isso faz o sistema memorizar a URL pública. Volte ao editor, escolha a função **`linkDeAcesso`** e clique em **▶ Executar**. O registro mostra um **link**: mande-o para o seu celular (WhatsApp para você mesmo, e-mail) e **abra no navegador do celular**. Escolha nome, foto e PIN. Pronto: você é o Administrador.
 
-Para os outros da família: no app, **Configurações → Membros → Convidar**. Leitura de cupons com IA (chave do Claude), e-mails, SMS e Telegram são opcionais e estão nas Partes 5 a 7 abaixo.
+Para os outros da família: no app, **Painel → Convidar** (ou **Configurações → Membros → Convidar a família pelo WhatsApp**): uma linha por pessoa, um toque e o convite vai pelo WhatsApp com o link e os 3 passos. Leitura de cupons com IA (chave do Claude), e-mails, SMS e Telegram são opcionais e estão nas Partes 5 a 7 abaixo.
 
 > Para atualizar o código no futuro: cole o arquivo novo por cima, depois **Implantar → Gerenciar implantações → ✏️ → Versão: Nova versão → Implantar**. O link da API continua o mesmo.
 
@@ -109,7 +109,7 @@ A versão passo a passo de tudo, inclusive o que é opcional. Se já fez a insta
 
 ### Parte 4 — Instalar no celular de cada um
 
-1. O administrador entra pelo link que `linkDeAcesso()` imprimiu (Passo 3 da instalação curta) e vai em **Configurações → Membros → Convidar**. Escolha o perfil (Administrador / Adulto / Dependente) e **envie o link ou mostre o QR Code**.
+1. O administrador entra pelo link que `linkDeAcesso()` imprimiu (Passo 3 da instalação curta) e toca em **Convidar** no Painel (ou **Configurações → Membros → Convidar a família pelo WhatsApp**). Para cada pessoa: nome, perfil (Adulto / Filho(a) / Admin), o WhatsApp se quiser, e **Enviar pelo WhatsApp** — a mensagem já vai com o link e os 3 passos. Também dá para copiar a mensagem ou mostrar o QR.
 2. A pessoa abre o link **no navegador do celular** (Safari no iPhone, Chrome no Android) e segue as instruções na tela:
    - **iPhone (Safari)**: toque no botão **Compartilhar** (quadrado com seta ⬆️, embaixo) → role e toque em **"Adicionar à Tela de Início"** → **Adicionar**.
    - **Android (Chrome)**: toque no menu **⋮** (canto superior direito) → **"Instalar app"** ou **"Adicionar à tela inicial"** → **Instalar**.

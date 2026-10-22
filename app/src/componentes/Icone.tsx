@@ -15,7 +15,7 @@ import {
   CheckCircle2, Undo2, Image, Shield, Crown, Anchor, Leaf, Wheat, Cross, UserRound, Mail, ExternalLink, Database,
   RefreshCw, Eye, EyeOff, Plus, Minus, ArrowUp, ArrowDown, Sparkles, Inbox, ListChecks, Scale, Coins, FileSpreadsheet,
   Printer, Filter, MoreHorizontal, Menu, Lightbulb, BadgeCheck, Hourglass, CircleCheck, CircleX, CircleAlert, BookMarked,
-  Goal, Siren, Baby, HandHelping, Inbox as CaixaEntrada,
+  Goal, Siren, Baby, HandHelping, MessageCircle, UserPlus, Inbox as CaixaEntrada,
 } from 'lucide-react'
 
 export const ICONES: Record<string, LucideIcon> = {
@@ -43,6 +43,7 @@ export const ICONES: Record<string, LucideIcon> = {
   'file-spreadsheet': FileSpreadsheet, printer: Printer, filter: Filter, 'more-horizontal': MoreHorizontal, menu: Menu,
   lightbulb: Lightbulb, 'badge-check': BadgeCheck, hourglass: Hourglass, 'circle-check': CircleCheck, 'circle-x': CircleX,
   'circle-alert': CircleAlert, 'book-marked': BookMarked, goal: Goal, siren: Siren, baby: Baby, 'hand-helping': HandHelping,
+  'message-circle': MessageCircle, 'user-plus': UserPlus,
   'caixa-entrada': CaixaEntrada,
 }
 
