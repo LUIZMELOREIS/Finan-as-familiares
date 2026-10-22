@@ -195,7 +195,7 @@ export function Membros() {
 function OutroAparelho() {
   const sessao = lerSessao()
   if (!sessao?.url_api) return null
-  const link = `${location.origin}${location.pathname}#/entrar?c=${codificarConvite({ convite: '', api: sessao.url_api, familia: sessao.token_familia })}`
+  const link = `${location.origin}${location.pathname}?c=${codificarConvite({ convite: '', api: sessao.url_api, familia: sessao.token_familia })}`
   const compartilhar = async () => {
     try { await navigator.share({ title: 'Finanças da Família — outro aparelho', text: 'Abra no celular novo, escolha o seu nome e digite o seu PIN:', url: link }) } catch { /* cancelado */ }
   }
