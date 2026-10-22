@@ -41,6 +41,7 @@ export default function Lancar() {
   const avisar = useSessao((e) => e.avisar)
   const filtros = useSessao((e) => e.filtros)
   const atualizarRegrasLoja = useSessao((e) => e.atualizarRegrasLoja)
+  const atualizarContasFixas = useSessao((e) => e.atualizarContasFixas)
   const nav = useNavigate()
   const loc = useLocation()
   const [params] = useSearchParams()
@@ -221,7 +222,7 @@ export default function Lancar() {
         <div className="entry" style={{ gridTemplateColumns: 'minmax(0, 640px)' }}>
           <div className="card">
             <h3>Dados lidos da fatura <span className="sub">PDF ou foto</span></h3>
-            <EnviarFatura contasFixas={contas_fixas} competenciaPadrao={competenciaDosFiltros(filtros)} avisar={avisar} aoSalvar={aoSalvarFatura} autoAbrir={modoParam === 'fatura' && !compartilhado} arquivoInicial={compartilhado} />
+            <EnviarFatura contasFixas={contas_fixas} categorias={categorias} podeCriarContaFixa={usuario.perfil === 'Administrador'} aoCriarContaFixa={(cf) => atualizarContasFixas([...contas_fixas, cf])} competenciaPadrao={competenciaDosFiltros(filtros)} avisar={avisar} aoSalvar={aoSalvarFatura} autoAbrir={modoParam === 'fatura' && !compartilhado} arquivoInicial={compartilhado} />
           </div>
         </div>
       ) : (

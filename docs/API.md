@@ -54,7 +54,7 @@ Competência é `AAAA-MM`.
 | `listar_orcamento` | Adulto | `competencia` | `Orcamento[]` |
 | `salvar_orcamento` | Administrador | `competencia`, `itens: Orcamento[]` | `Orcamento[]` |
 | `copiar_orcamento` | Administrador | `de`, `para` | `Orcamento[]` |
-| `ler_imagem` | Júnior | `imagem_base64`, `mime`, `tipo: 'cupom'\|'conta'\|'fatura_cartao'`, `nome_arquivo?` | `LeituraExtraida` (salva o arquivo no Drive e devolve `anexo_url`) |
+| `ler_imagem` | Júnior | `imagem_base64`, `mime`, `tipo: 'cupom'\|'conta'\|'fatura_cartao'`, `nome_arquivo?`, `texto_extraido?` (texto que o app já tirou do PDF no aparelho; sem chave do Claude dispensa o OCR do Drive) | `LeituraExtraida` (salva o arquivo no Drive e devolve `anexo_url`) |
 | `ler_texto` | Júnior | `texto`, `tipo: 'voz'\|'sms'` | `LeituraExtraida` |
 | `consultar_nfce` | Júnior | `url_qr` | `LeituraExtraida` |
 | `listar_contas_fixas` | Adulto | — | `ContaFixa[]` |

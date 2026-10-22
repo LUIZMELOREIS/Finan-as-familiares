@@ -34,6 +34,7 @@ export default function Contas() {
   const avisar = useSessao((e) => e.avisar)
   const filtros = useSessao((e) => e.filtros)
   const setContasAPagar = useSessao((e) => e.setContasAPagar)
+  const atualizarContasFixas = useSessao((e) => e.atualizarContasFixas)
   const nav = useNavigate()
   const [params, setParams] = useSearchParams()
   const ehDependente = usuario.perfil === 'Dependente'
@@ -183,7 +184,7 @@ export default function Contas() {
       <DetalheConta conta={detalhe} contaFixa={detalheCf} categoria={categorias.find((c) => c.id === detalheCf?.categoria_id)} usuarios={usuarios} aoFechar={() => setDetalhe(null)} aoAtualizar={atualizarConta} avisar={avisar} />
 
       <Folha aberta={enviar} aoFechar={fecharEnvio} titulo="Enviar fatura" largura={640}>
-        <EnviarFatura contasFixas={contas_fixas} competenciaPadrao={competencia} avisar={avisar} aoSalvar={() => { fecharEnvio(); setVersao((v) => v + 1) }} autoAbrir={params.get('enviar') === '1'} />
+        <EnviarFatura contasFixas={contas_fixas} categorias={categorias} podeCriarContaFixa={usuario.perfil === 'Administrador'} aoCriarContaFixa={(cf) => atualizarContasFixas([...contas_fixas, cf])} competenciaPadrao={competencia} avisar={avisar} aoSalvar={() => { fecharEnvio(); setVersao((v) => v + 1) }} autoAbrir={params.get('enviar') === '1'} />
       </Folha>
     </>
   )
