@@ -18,6 +18,7 @@ const Conselho = lazy(() => import('./paginas/Conselho'))
 const Reuniao = lazy(() => import('./paginas/Reuniao'))
 const Patrimonio = lazy(() => import('./paginas/Patrimonio'))
 const Mesada = lazy(() => import('./paginas/Mesada'))
+const Convidar = lazy(() => import('./paginas/Convidar'))
 const Configuracoes = lazy(() => import('./paginas/Configuracoes'))
 const Entrar = lazy(() => import('./paginas/Entrar'))
 const Tutorial = lazy(() => import('./paginas/Tutorial'))
@@ -69,6 +70,7 @@ export default function App() {
                 <Route path="/reuniao" element={<Reuniao />} />
                 <Route path="/patrimonio" element={<Patrimonio />} />
                 <Route path="/mesada" element={<Mesada />} />
+                <Route path="/convidar" element={<Convidar />} />
                 <Route path="/configuracoes/*" element={<Configuracoes />} />
                 <Route path="/brasao" element={<Brasao />} />
                 <Route path="/captura" element={<CapturaAutomatica />} />

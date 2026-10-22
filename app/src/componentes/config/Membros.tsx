@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import type { Perfil, Usuario } from '../../tipos'
 import { codificarConvite } from '../../util/convite'
 import { lerSessao } from '../../api/cliente'
@@ -127,7 +128,8 @@ function Convite() {
   return (
     <div className="card">
       <h3>Convidar alguém <span className="sub">vale 7 dias</span></h3>
-      <Campo rotulo="Perfil de quem vai entrar" ajuda={DESCRICAO_PERFIL[perfil]}>
+      <Link to="/convidar" className="btn btn-primary btn-block" style={{ marginBottom: 12, background: '#1f9d55', borderColor: '#1f9d55' }}><Icone nome="message-circle" />Convidar a família pelo WhatsApp (mais rápido)</Link>
+      <Campo rotulo="Ou gere um convite avulso — perfil de quem vai entrar" ajuda={DESCRICAO_PERFIL[perfil]}>
         <div className="seg" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
           {PERFIS.map((p) => <button key={p} type="button" aria-pressed={perfil === p} onClick={() => setPerfil(p)}>{p}</button>)}
         </div>

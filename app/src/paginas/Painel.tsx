@@ -102,6 +102,14 @@ export default function Painel() {
       )}
       {dados.carregando && !resumo && <Carregando texto="Montando o painel…" />}
 
+      {boot.usuario.perfil === 'Administrador' && boot.usuarios.filter((u) => u.ativo).length < 2 && (
+        <Link to="/convidar" className="card" style={{ marginBottom: 14, display: 'flex', gap: 12, alignItems: 'center', textDecoration: 'none' }}>
+          <span className="ico-sm" aria-hidden="true" style={{ color: '#1f9d55' }}><Icone nome="message-circle" /></span>
+          <span style={{ flex: 1, fontSize: 13 }}><b>Convide a família.</b> Um toque por pessoa: o convite vai pelo WhatsApp com o link e os 3 passos para instalar.</span>
+          <span className="btn btn-primary btn-sm" style={{ background: '#1f9d55', borderColor: '#1f9d55' }}>Convidar</span>
+        </Link>
+      )}
+
       {ehDependente ? (
         <PainelDependente cards={cards} mesada={dados.mesada} competencia={competencia} mesNome={mesNome} usuarioId={boot.usuario.id} />
       ) : (

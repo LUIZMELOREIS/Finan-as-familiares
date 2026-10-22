@@ -3,7 +3,7 @@
 > Como usar o app **Finanças da Família** no dia a dia. Imprima e cole na geladeira.
 
 ## 1. Instalar no celular (só na primeira vez)
-1. Abra o **link de convite** que o administrador mandou (no **Safari** se for iPhone, no **Chrome** se for Android).
+1. Abra o **link de convite** que o administrador mandou pelo WhatsApp (no **Safari** se for iPhone, no **Chrome** se for Android). Administrador: para convidar, toque em **Convidar** no Painel — um toque por pessoa e a mensagem vai pronta.
 2. **iPhone:** toque em **Compartilhar → Adicionar à Tela de Início → Adicionar**. **Android:** toque em **⋮ → Instalar app**.
 3. Abra pelo **ícone novo**, informe nome e apelido e crie um **PIN de 4 dígitos**. O celular fica lembrado.
 
