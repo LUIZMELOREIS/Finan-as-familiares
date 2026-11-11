@@ -649,5 +649,168 @@ teste('threadsNaoProcessadas filtra pelo marcador "Processado" sem usar GmailApp
 teste('TAMANHO_PEDACO_CACHE cabe em 100 KB mesmo com acentos (2 bytes por caractere)', () => assert.ok(vm.runInContext('TAMANHO_PEDACO_CACHE', ctx) * 2 <= 100 * 1024))
 teste('CSV de exportação começa com BOM escapado (\\uFEFF)', () => assert.ok(fs.readFileSync(path.join(raiz, 'lancamentos.gs'), 'utf8').includes("'\\uFEFF' +")))
 
+console.log('20) Robô de notas fiscais — Fase 0 (parsers, cookies e fluxo OAuth simulado)')
+const amostra = (nome) => fs.readFileSync(path.join(raiz, 'testes', 'amostras', nome), 'utf8')
+const urlSefa = amostra('sefa_authentication_url.txt').trim()
+const simples = (x) => JSON.parse(JSON.stringify(x)) // objetos vindos do outro realm (vm) não são deepEqual aos daqui
+const cookiesOrdenados = (s) => s.split('; ').sort().join('; ')
+teste('hostDeUrl / resolverUrl (absoluta, raiz, relativa, //cdn, ?query)', () => {
+  assert.equal(g.hostDeUrl('https://Authz-Sefa.identidadedigital.pr.gov.br/cidadao_authz/x?y=1'), 'authz-sefa.identidadedigital.pr.gov.br')
+  const base = 'https://authz-sefa.identidadedigital.pr.gov.br/cidadao_authz/authentication.jsp?a=1'
+  assert.equal(g.resolverUrl(base, 'api/v1/authorize'), 'https://authz-sefa.identidadedigital.pr.gov.br/cidadao_authz/api/v1/authorize')
+  assert.equal(g.resolverUrl(base, '/Home/CheckLogin'), 'https://authz-sefa.identidadedigital.pr.gov.br/Home/CheckLogin')
+  assert.equal(g.resolverUrl(base, 'https://notaparana.pr.gov.br/nfprweb/Extrato'), 'https://notaparana.pr.gov.br/nfprweb/Extrato')
+  assert.equal(g.resolverUrl(base, '//cdn.exemplo/x.js'), 'https://cdn.exemplo/x.js')
+  assert.equal(g.resolverUrl(base, '?b=2'), 'https://authz-sefa.identidadedigital.pr.gov.br/cidadao_authz/authentication.jsp?b=2')
+})
+teste('lerQueryString não decodifica (igual ao JavaScript da página da Sefa)', () => {
+  const q = g.lerQueryString(urlSefa)
+  assert.equal(q.response_type, 'code'); assert.equal(q.code_challenge_method, 'S256')
+  assert.equal(q.redirect_uri, 'https%3A%2F%2Fnotaparana.pr.gov.br%2Fnfprweb%2Fcallback')
+  assert.equal(q.mensagem, ''); assert.equal(q.nome, 'Nota+Paran%C3%A1')
+})
+teste('camposDoFormularioSefa: todos os ocultos do authForm + step=2', () => {
+  const campos = g.camposDoFormularioSefa(urlSefa)
+  const ocultos = [...amostra('sefa_authentication.html').matchAll(/type="hidden" name="(\w+)"/g)].map((m) => m[1])
+  for (const nome of ocultos) assert.ok(nome in campos, 'falta ' + nome)
+  assert.equal(campos.step, '2')
+  assert.ok(!('attribute' in campos) && !('password' in campos))
+})
+teste('ehPaginaLoginSefa pela URL ou pelo HTML', () => {
+  assert.equal(g.ehPaginaLoginSefa(urlSefa, ''), true)
+  assert.equal(g.ehPaginaLoginSefa('https://notaparana.pr.gov.br/nfprweb/Extrato', amostra('sefa_authentication.html')), true)
+  assert.equal(g.ehPaginaLoginSefa('https://notaparana.pr.gov.br/nfprweb/Extrato', amostra('notapr_lista_mes.html')), false)
+})
+teste('extrairCamposOcultos / extrairAcaoFormulario (Nota Curitibana)', () => {
+  const html = amostra('notacwb_home.html')
+  assert.deepEqual(simples(g.extrairCamposOcultos(html)), { __RequestVerificationToken: 'TOKEN_EXEMPLO_NAO_REAL_abcdef0123456789' })
+  assert.equal(g.extrairAcaoFormulario(html, /CheckLogin/i), '/Home/CheckLogin')
+  assert.equal(g.extrairAcaoFormulario(amostra('sefa_authentication.html'), /id="authForm"/i), 'api/v1/authorize')
+  assert.equal(g.extrairAcaoFormulario('<p>sem form</p>'), '')
+})
+teste('extrairIdsNotasPr / contarNotasPr: 3 notas, sem repetir o id duplicado', () => {
+  const html = amostra('notapr_lista_mes.html')
+  assert.deepEqual(simples(g.extrairIdsNotasPr(html)), ['900000001', '900000002', '900000003'])
+  assert.equal(g.contarNotasPr(html), 3)
+  assert.equal(g.contarNotasPr(''), 0)
+  assert.equal(g.contarNotasPr(JSON.stringify([{ idDocFiscal: 1 }, { idDocFiscal: 2 }])), 2)
+})
+teste('periodoNotaPr', () => assert.equal(g.periodoNotaPr(2026, 11), '01/11/2026'))
+teste('classificarRespostaPortal: bloqueado, desafio, senha inválida, formulário, ok, redirecionamento', () => {
+  assert.equal(g.classificarRespostaPortal(403, '<h1>Forbidden</h1>', 'https://notaparana.pr.gov.br/'), 'bloqueado')
+  assert.equal(g.classificarRespostaPortal(503, '', ''), 'bloqueado')
+  assert.equal(g.classificarRespostaPortal(200, amostra('ecidadao_login.html'), 'https://autenticacao-ecidadao.curitiba.pr.gov.br/'), 'desafio')
+  assert.equal(g.classificarRespostaPortal(200, amostra('sefa_authentication.html'), urlSefa), 'formulario_login')
+  assert.equal(g.classificarRespostaPortal(200, '', urlSefa.replace('mensagem=', 'mensagem=Usu%C3%A1rio+ou+senha+inv%C3%A1lidos')), 'senha_invalida')
+  assert.equal(g.classificarRespostaPortal(200, amostra('notapr_lista_mes.html'), 'https://notaparana.pr.gov.br/nfprweb/NotasFiscaisAjax'), 'ok')
+  assert.equal(g.classificarRespostaPortal(302, '', 'https://x/'), 'redirecionamento')
+})
+teste('textoSeguroParaLog apaga números longos e valores de token/senha', () => {
+  const t = g.textoSeguroParaLog('cpf 123.456.789-09 senha=abc token: xyz ok 12')
+  assert.ok(!/123/.test(t) && !/abc/.test(t) && !/xyz/.test(t)); assert.ok(/ok 12/.test(t))
+})
+teste('guardarCookies / cabecalhoCookie: por host, Domain pai, substituição e remoção', () => {
+  const pote = {}
+  g.guardarCookies(pote, 'notaparana.pr.gov.br', ['JSESSIONID=a1; Path=/nfprweb; HttpOnly', 'pref=x; Domain=.pr.gov.br'])
+  g.guardarCookies(pote, 'authz-sefa.identidadedigital.pr.gov.br', 'AUTHZ=z9; Secure')
+  assert.equal(cookiesOrdenados(g.cabecalhoCookie(pote, 'notaparana.pr.gov.br')), 'JSESSIONID=a1; pref=x')
+  assert.equal(cookiesOrdenados(g.cabecalhoCookie(pote, 'authz-sefa.identidadedigital.pr.gov.br')), 'AUTHZ=z9; pref=x')
+  assert.equal(g.cabecalhoCookie(pote, 'outro.com.br'), '')
+  g.guardarCookies(pote, 'notaparana.pr.gov.br', 'JSESSIONID=b2; Path=/')
+  assert.equal(g.contarCookies(pote, 'notaparana.pr.gov.br'), 2)
+  assert.ok(/JSESSIONID=b2/.test(g.cabecalhoCookie(pote, 'notaparana.pr.gov.br')))
+  g.guardarCookies(pote, 'notaparana.pr.gov.br', 'JSESSIONID=; Max-Age=0')
+  assert.equal(g.cabecalhoCookie(pote, 'notaparana.pr.gov.br'), 'pref=x')
+})
+
+// Servidor falso: reproduz os saltos do OAuth (Extrato → Sefa → POST → callback → Extrato) e confere
+// que o robô leva o cookie certo a cada host, envia os campos do formulário e nunca segue redirecionamento sozinho.
+function servidorFalsoNotaParana(opts) {
+  const o = Object.assign({ senhaCerta: 'segredo', bloquear: false }, opts)
+  const chamadas = []
+  const resposta = (status, headers, body) => ({ getResponseCode: () => status, getAllHeaders: () => headers, getContentText: () => body || '' })
+  return {
+    chamadas,
+    fetch(url, params) {
+      chamadas.push({ url, params })
+      assert.equal(params.followRedirects, false, 'nunca seguir redirecionamentos sozinho')
+      const cookie = (params.headers || {}).Cookie || ''
+      if (o.bloquear) return resposta(403, {}, '<h1>Access Denied</h1>')
+      if (url === 'https://notaparana.pr.gov.br/nfprweb/Extrato' && !/SESSAO=ok/.test(cookie)) return resposta(302, { 'Set-Cookie': 'JSESSIONID=np1; Path=/', Location: '/nfprweb/Login' }, '')
+      if (url === 'https://notaparana.pr.gov.br/nfprweb/Login') { assert.ok(/JSESSIONID=np1/.test(cookie)); return resposta(302, { Location: urlSefa }, '') }
+      if (url === urlSefa) return resposta(200, { 'Set-Cookie': ['AUTHZ=s1; Path=/; Secure', 'XSRF=t1; Domain=.identidadedigital.pr.gov.br'], 'Content-Type': 'text/html;charset=ISO-8859-1' }, amostra('sefa_authentication.html'))
+      if (url === 'https://authz-sefa.identidadedigital.pr.gov.br/cidadao_authz/api/v1/authorize') {
+        assert.equal(params.method, 'post'); assert.ok(/AUTHZ=s1/.test(cookie) && /XSRF=t1/.test(cookie), 'cookies da Sefa no POST')
+        assert.ok(!/JSESSIONID/.test(cookie), 'cookie do Nota Paraná não vaza para a Sefa')
+        const corpo = Object.fromEntries(new URLSearchParams(params.payload))
+        assert.equal(corpo.step, '2'); assert.equal(corpo.attribute, '12345678909'); assert.equal(corpo.code_challenge_method, 'S256')
+        assert.equal(corpo.redirect_uri, 'https%3A%2F%2Fnotaparana.pr.gov.br%2Fnfprweb%2Fcallback', 'valor cru da URL, como o navegador envia')
+        if (corpo.password !== o.senhaCerta) return resposta(302, { Location: urlSefa.replace('mensagem=', 'mensagem=Usu%C3%A1rio+ou+senha+inv%C3%A1lidos') }, '')
+        return resposta(302, { Location: 'https://notaparana.pr.gov.br/nfprweb/callback?code=C0D1G0&state=EST4DO_EXEMPLO_abc123' }, '')
+      }
+      if (/^https:\/\/notaparana\.pr\.gov\.br\/nfprweb\/callback\?code=/.test(url)) { assert.ok(/JSESSIONID=np1/.test(cookie)); assert.ok(!/AUTHZ/.test(cookie)); return resposta(302, { 'Set-Cookie': 'SESSAO=ok; Path=/nfprweb; HttpOnly', Location: '/nfprweb/Extrato' }, '') }
+      if (url === 'https://notaparana.pr.gov.br/nfprweb/Extrato') return resposta(200, { 'Content-Type': 'text/html;charset=ISO-8859-1' }, '<html>Minhas Notas</html>')
+      if (/^https:\/\/notaparana\.pr\.gov\.br\/nfprweb\/NotasFiscaisAjax\?periodo=01%2F\d\d%2F\d{4}&situacao=1$/.test(url)) {
+        assert.ok(/SESSAO=ok/.test(cookie)); assert.equal(params.headers['X-Requested-With'], 'XMLHttpRequest')
+        return resposta(200, { 'Content-Type': 'text/html;charset=ISO-8859-1' }, amostra('notapr_lista_mes.html'))
+      }
+      throw new Error('URL inesperada no servidor falso: ' + url)
+    },
+  }
+}
+teste('loginNotaParana: fluxo OAuth completo pelo servidor falso → ok, cookies por host, 3 notas no mês', () => {
+  g.UrlFetchApp = servidorFalsoNotaParana()
+  const r = g.loginNotaParana({ cpf: '123.456.789-09', senha: 'segredo' })
+  assert.equal(r.ok, true, r.etapa + ': ' + r.motivo)
+  assert.deepEqual(simples(r.saltos).map((s) => s.split(' [')[0]), ['notaparana.pr.gov.br/nfprweb/Extrato', 'notaparana.pr.gov.br/nfprweb/Login', 'authz-sefa.identidadedigital.pr.gov.br/cidadao_authz/authentication.jsp', 'authz-sefa.identidadedigital.pr.gov.br/…/authorize', 'notaparana.pr.gov.br/nfprweb/callback', 'notaparana.pr.gov.br/nfprweb/Extrato'])
+  assert.ok(r.saltos.every((s) => !/code=|C0D1G0|EST4DO/.test(s)), 'saltos não guardam query string')
+  const lista = g.listarNotasMesNotaParana(r.pote, 2026, 11)
+  assert.equal(lista.classe, 'ok'); assert.equal(lista.quantidade, 3)
+})
+teste('loginNotaParana: senha errada → senha_invalida, sem tentar de novo', () => {
+  const srv = servidorFalsoNotaParana(); g.UrlFetchApp = srv
+  const r = g.loginNotaParana({ cpf: '12345678909', senha: 'errada' })
+  assert.equal(r.ok, false); assert.equal(r.motivo, 'senha_invalida'); assert.equal(r.etapa, 'autenticacao')
+  assert.equal(srv.chamadas.filter((c) => c.params.method === 'post').length, 1)
+})
+teste('loginNotaParana: 403 → bloqueado (Plano B); conexão recusada → conexao_recusada; sem credencial', () => {
+  g.UrlFetchApp = servidorFalsoNotaParana({ bloquear: true })
+  assert.equal(g.loginNotaParana({ cpf: '1', senha: 'x' }).motivo, 'bloqueado')
+  g.UrlFetchApp = { fetch: () => { throw new Error('Address unavailable: https://notaparana.pr.gov.br/nfprweb/Extrato') } }
+  assert.equal(g.loginNotaParana({ cpf: '1', senha: 'x' }).motivo, 'conexao_recusada')
+  assert.equal(g.loginNotaParana(null).motivo, 'credencial ausente')
+  assert.ok(/Plano B/.test(g.dicaFase0('bloqueado')) && /Plano B/.test(g.dicaFase0('conexao_recusada')))
+})
+teste('testeLoginNotaParana imprime só o resumo (sem CPF, senha, cookie ou código)', () => {
+  props.set('NOTAPR_u_teste', JSON.stringify({ cpf: '123.456.789-09', senha: 'segredo' }))
+  g.UrlFetchApp = servidorFalsoNotaParana()
+  const saida = g.testeLoginNotaParana()
+  assert.ok(/login ok · 3 notas em \d\d\/\d{4}/.test(saida), saida)
+  assert.ok(!/123|segredo|np1|SESSAO|C0D1G0|AUTHZ/.test(saida), 'vazou dado sensível: ' + saida)
+  assert.deepEqual(simples(g.listarUsuariosComCredencial('NOTAPR_')), ['u_teste'])
+  props.delete('NOTAPR_u_teste')
+  assert.ok(/Nenhuma credencial/.test(g.testeLoginNotaParana()))
+})
+teste('testeLoginNotaCuritibana: segue até o e-Cidadão e aponta o desafio ALTCHA', () => {
+  const resposta = (status, headers, body) => ({ getResponseCode: () => status, getAllHeaders: () => headers, getContentText: () => body || '' })
+  g.UrlFetchApp = { fetch(url, params) {
+    const cookie = (params.headers || {}).Cookie || ''
+    if (url === 'https://notacuritibana.curitiba.pr.gov.br/') return resposta(200, { 'Set-Cookie': ['.AspNetCore.Antiforgery.X=af1; path=/; samesite=strict; httponly', '.AspNetCore.Session=s1; path=/'] }, amostra('notacwb_home.html'))
+    if (url === 'https://notacuritibana.curitiba.pr.gov.br/Home/CheckLogin') {
+      assert.equal(params.method, 'post'); assert.ok(/Antiforgery\.X=af1/.test(cookie) && /Session=s1/.test(cookie))
+      assert.equal(Object.fromEntries(new URLSearchParams(params.payload)).__RequestVerificationToken, 'TOKEN_EXEMPLO_NAO_REAL_abcdef0123456789')
+      return resposta(302, { Location: 'http://autenticacao-ecidadao.curitiba.pr.gov.br/00000000-0000-0000-0000-000000000000/' }, '')
+    }
+    if (url === 'https://autenticacao-ecidadao.curitiba.pr.gov.br/00000000-0000-0000-0000-000000000000/') { assert.ok(!/Session=s1/.test(cookie)); return resposta(302, { Location: '/' }, '') }
+    if (url === 'https://autenticacao-ecidadao.curitiba.pr.gov.br/') return resposta(200, { 'Content-Type': 'text/html; charset=utf-8' }, amostra('ecidadao_login.html'))
+    throw new Error('URL inesperada: ' + url)
+  } }
+  const saida = g.testeLoginNotaCuritibana()
+  assert.ok(/CheckLogin: HTTP 302 → autenticacao-ecidadao/.test(saida), saida)
+  assert.ok(/desafio ALTCHA/.test(saida) && /loginsenha/.test(saida), saida)
+  assert.ok(!/af1|s1;|TOKEN_EXEMPLO/.test(saida), 'vazou token/cookie: ' + saida)
+})
+delete g.UrlFetchApp
+
 console.log(`\n${total - falhas}/${total} testes passaram${falhas ? ` — ${falhas} FALHA(S)` : ''}`)
 process.exit(falhas ? 1 : 0)

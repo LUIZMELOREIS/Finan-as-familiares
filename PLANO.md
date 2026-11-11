@@ -33,6 +33,20 @@ Fases da v2 (seção 12 do prompt):
 
 Verificação da v2: `npm test` 45 testes · `node apps-script/testes/executar.mjs` 128 testes · build limpo · nenhum emoji em `app/src` · capturas em `app/capturas/` (`npm run capturas` e `TAMANHO=desktop npm run capturas`).
 
+## Robô de Notas Fiscais (11/11/2026) — Nota Paraná + Nota Curitibana
+
+Especificação completa em `docs/ROBO_NOTAS_FISCAIS.md` (fases 0 a 6). Estado:
+
+| Fase | Entrega | Estado |
+|---|---|---|
+| 0 | Prova de conceito do login pelo `UrlFetchApp` (`apps-script/notasFiscais.gs`: `testeLoginNotaParana()` e `testeLoginNotaCuritibana()`), parsers puros com amostras anonimizadas em `apps-script/testes/amostras/` | ✅ código · ⏸️ o Luiz precisa rodar `testeLoginNotaParana()` no Apps Script com a propriedade `NOTAPR_<usuario_id>` para decidir Plano A × Plano B |
+| 1–6 | Leitura, conciliação, automação, voz, tela de configurações, documentação | ⬜ aguardam o resultado da Fase 0 |
+
+Achados do mapeamento (11/11/2026, sem credenciais):
+- O host da aplicação `notaparana.pr.gov.br` **recusa conexões de fora do Brasil** (reset de TCP); o portal institucional `www.notaparana.pr.gov.br` e a Identidade Digital `authz-sefa.identidadedigital.pr.gov.br` respondem normalmente. Por isso a prova só pode ser feita de dentro do Apps Script. Se o IP do Google também for barrado, o Plano B (GitHub Actions, também nos EUA) tende a ser barrado igualmente; a alternativa seria rodar o coletor num computador no Brasil.
+- A página `authentication.jsp` da Sefa preenche os campos ocultos do `authForm` copiando a query string **sem decodificar**; o robô reproduz isso (`camposDoFormularioSefa`). Não há captcha; há passkey e gov.br como opções.
+- O Nota Curitibana manda para o **e-Cidadão** (`autenticacao-ecidadao.curitiba.pr.gov.br`), cuja página de login carrega o **ALTCHA** (prova de trabalho em JavaScript) e monta o formulário de CPF + senha por JavaScript (`/autenticacao/loginsenha/`). O robô detecta o desafio e relata; a decisão sobre como entrar fica para depois da Fase 0 do Nota Paraná.
+
 Simplificações conhecidas da v2:
 - **Ícones do brasão**: o Apps Script não rasteriza SVG; os PNGs 192/512 são baixados na tela Brasão e substituem `app/public/icones/` + `brasao.svg` antes de republicar (ou `npm run icones`).
 - **Push nativo**: continua via serviço externo opcional; sem ele os avisos vão por e-mail e Telegram.

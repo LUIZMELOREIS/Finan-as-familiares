@@ -30,6 +30,7 @@ Tudo está em português e comentado. Você não precisa saber programar para in
 | `rotinas.gs` | Próximas saídas (30/60/90 dias), avisos do vigia, alertas personalizados e as rotinas `vigiaDiario`, `analiseQuinzenal`, `fechamentoDoMes`. |
 | `assistente.gs` | Assistente: resumo agregado dos dados, conversa com o Claude com *tool use*, regras locais sem chave, histórico (aba `Conversas`), sugestões. |
 | `telegram.gs` | Bot do Telegram: `configurarTelegram()`, webhook `?telegram=1`, `/start CODIGO`, texto → assistente, foto → cupom com botões, `enviarTelegram()`. |
+| `notasFiscais.gs` | Robô de Notas Fiscais (Nota Paraná + Nota Curitibana), Fase 0: login pelo `UrlFetchApp` seguindo o OAuth à mão, `testeLoginNotaParana()` / `testeLoginNotaCuritibana()`. Credenciais só em Propriedades do script (`NOTAPR_<usuario_id>`). Ver `docs/ROBO_NOTAS_FISCAIS.md`. |
 | `notificacoes.gs` | Push (via serviço externo opcional), lembrete diário, e-mail de resumo e `notificarUsuario()` (push → Telegram → e-mail). |
 | `backup.gs` | Backup semanal (mantém os 12 últimos) e `backup_agora`. |
 | `dados_iniciais.gs` | Tipos, grupos, categorias (cardápio), grupos de análise, cores e versículos (gerado a partir de `/dados`, não edite à mão). |
@@ -49,7 +50,7 @@ Tudo está em português e comentado. Você não precisa saber programar para in
 
 **Opção A2 — um arquivo só (a mais fácil)**
 
-Em vez de criar 17 arquivos, abra `Código.gs` e cole o conteúdo de `dist/FinancasDaFamilia.gs` (todos os `.gs` concatenados; gerado por `node testes/empacotar.mjs`). O `appsscript.json` continua indo no manifesto. O resultado é idêntico, porque o Apps Script compartilha o escopo global entre arquivos.
+Em vez de criar 18 arquivos, abra `Código.gs` e cole o conteúdo de `dist/FinancasDaFamilia.gs` (todos os `.gs` concatenados; gerado por `node testes/empacotar.mjs`). O `appsscript.json` continua indo no manifesto. O resultado é idêntico, porque o Apps Script compartilha o escopo global entre arquivos.
 
 **Opção B — com o `clasp` (para quem usa terminal)**
 
