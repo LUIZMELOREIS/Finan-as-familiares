@@ -1,0 +1,15 @@
+<!DOCTYPE html><html lang="pt-br"><head><title>e-Cidadão - Prefeitura de Curitiba</title></head>
+<body>
+<div id="loginPartial">
+  <input type="text" id="cpfLogin" placeholder="CPF" />
+  <form role="form" action="https://autenticacao-ecidadao.curitiba.pr.gov.br/00000000-0000-0000-0000-000000000000/certificado-digital/iniciar" method="get">
+    <button type="submit" id="logarCertificado">Certificado digital</button>
+  </form>
+</div>
+<script src="/js/bundle/geral.min.js"></script>
+<script src="/js/captcha/altcha.min.js"></script>
+<script src="/js/captcha/altcha.pt-br.min.js"></script>
+<script src="/js/captcha/ici-captcha.js?v=exemplo"></script>
+<script src="/js/bundle/login.min.js"></script>
+<script>var urls = { loginSenha: "/autenticacao/loginsenha/", documento: "/autenticacao/logindocumento/", desafio: "/captcha/desafio" };</script>
+</body></html>

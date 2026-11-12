@@ -5,7 +5,7 @@
  */
 import type { LucideIcon, LucideProps } from 'lucide-react'
 import {
-  Wallet, House, ShoppingCart, Target, Church, HandHeart, HandCoins, KeyRound, Building2, Landmark, Zap, Droplet, Flame,
+  Wallet, House, ShoppingCart, Target, Church, HandHeart, HandCoins, KeyRound, PlugZap, Building2, Landmark, Zap, Droplet, Flame,
   Wifi, Smartphone, HeartPulse, GraduationCap, BookOpen, Car, ShieldCheck, Bus, Tv, Apple, Croissant, Beef, Bike, Utensils,
   Fuel, ParkingMeter, Wrench, Pill, Stethoscope, Scissors, Hammer, Sofa, SprayCan, Ticket, Plane, Palette, Shirt, Gift,
   PawPrint, TriangleAlert, Briefcase, Banknote, PiggyBank, CircleDollarSign, LayoutGrid, CirclePlus, CalendarClock,
@@ -38,7 +38,7 @@ export const ICONES: Record<string, LucideIcon> = {
   'thumbs-up': ThumbsUp, 'thumbs-down': ThumbsDown, 'minus-circle': MinusCircle, clock: Clock, 'alert-circle': AlertCircle,
   info: Info, 'check-circle-2': CheckCircle2, 'undo-2': Undo2, image: Image, shield: Shield, crown: Crown, anchor: Anchor,
   leaf: Leaf, wheat: Wheat, cross: Cross, 'user-round': UserRound, mail: Mail, 'external-link': ExternalLink,
-  database: Database, 'refresh-cw': RefreshCw, eye: Eye, 'eye-off': EyeOff, plus: Plus, minus: Minus, 'arrow-up': ArrowUp,
+  database: Database, 'plug-zap': PlugZap, 'refresh-cw': RefreshCw, eye: Eye, 'eye-off': EyeOff, plus: Plus, minus: Minus, 'arrow-up': ArrowUp,
   'arrow-down': ArrowDown, sparkles: Sparkles, inbox: Inbox, 'list-checks': ListChecks, scale: Scale, coins: Coins,
   'file-spreadsheet': FileSpreadsheet, printer: Printer, filter: Filter, 'more-horizontal': MoreHorizontal, menu: Menu,
   lightbulb: Lightbulb, 'badge-check': BadgeCheck, hourglass: Hourglass, 'circle-check': CircleCheck, 'circle-x': CircleX,

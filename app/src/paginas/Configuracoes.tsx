@@ -22,6 +22,7 @@ import { Rotinas } from '../componentes/config/Rotinas'
 import { Acessibilidade } from '../componentes/config/Acessibilidade'
 import { Fe } from '../componentes/config/Fe'
 import { Dados } from '../componentes/config/Dados'
+import { NotasFiscais } from '../componentes/config/NotasFiscais'
 
 interface Secao {
   id: string
@@ -43,6 +44,7 @@ const SECOES: Secao[] = [
   { id: 'orcamento', icone: 'scale', nome: 'Orçamento', descricao: 'Planejado por categoria e divisão da renda', perfis: ['Administrador'], componente: Orcamento, grupo: 'dinheiro' },
   { id: 'contas-fixas', icone: 'calendar-clock', nome: 'Contas fixas', descricao: 'Luz, água, internet, plano de saúde, escola…', perfis: ['Administrador'], componente: ContasFixas, grupo: 'dinheiro' },
   { id: 'cartoes', icone: 'credit-card', nome: 'Cartões', descricao: 'Apelido, final, titular, fechamento e vencimento', perfis: ['Administrador'], componente: Cartoes, grupo: 'dinheiro' },
+  { id: 'notas-fiscais', icone: 'receipt', nome: 'Notas fiscais', descricao: 'Nota Paraná e Nota Curitibana: compras com CPF entram sozinhas', perfis: ADULTOS, componente: NotasFiscais, grupo: 'dinheiro' },
   { id: 'rotinas', icone: 'bell', nome: 'Rotinas e alertas', descricao: 'Vigia diário, quinzenal, fechamento, alertas e Telegram', perfis: ADULTOS, componente: Rotinas, grupo: 'app' },
   { id: 'captura', icone: 'smartphone', nome: 'Captura automática', descricao: 'SMS e alertas do banco viram lançamentos', perfis: TODOS, componente: () => <Navigate to="/captura" replace />, grupo: 'app' },
   { id: 'acessibilidade', icone: 'type', nome: 'Acessibilidade', descricao: 'Tamanho da letra, tema claro, alto contraste', perfis: TODOS, componente: Acessibilidade, grupo: 'app' },

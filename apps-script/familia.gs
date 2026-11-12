@@ -318,8 +318,9 @@ function acaoVersiculoDoDia(p) {
 // ---------- Configuração ----------
 
 const CONFIG_EDITAVEIS = ['nome_familia', 'sobrenome', 'url_brasao', 'url_foto_capa', 'versiculo_lema', 'moeda', 'dia_fechamento_mes', 'lembrete_horario', 'fe_ativa',
-  'divisao_dar', 'divisao_poupar', 'divisao_viver', 'valor_gasto_grande', 'regra_votacao', 'dependente_ve_salarios', 'rotina_vigia', 'rotina_quinzenal', 'rotina_fechamento', 'telegram_ativo'];
-const CHAVES_ROTINAS = ['lembrete_horario', 'rotina_vigia', 'rotina_quinzenal', 'rotina_fechamento'];
+  'divisao_dar', 'divisao_poupar', 'divisao_viver', 'valor_gasto_grande', 'regra_votacao', 'dependente_ve_salarios', 'rotina_vigia', 'rotina_quinzenal', 'rotina_fechamento', 'telegram_ativo',
+  'rotina_notas', 'notas_limite_direto', 'notas_limite_grande'];
+const CHAVES_ROTINAS = ['lembrete_horario', 'rotina_vigia', 'rotina_quinzenal', 'rotina_fechamento', 'rotina_notas'];
 
 /** salvar_config (Administrador): só as chaves públicas; reinstala os gatilhos das rotinas quando elas mudam. */
 function acaoSalvarConfig(p, ctx) {

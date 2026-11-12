@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, ErroApi } from '../api/cliente'
 import { useBoot, useSessao } from '../store/sessao'
-import type { ItemCaixaEntrada } from '../tipos'
+import type { DestinoNota, ItemCaixaEntrada } from '../tipos'
 import { moeda } from '../util/formato'
 import { Cabecalho } from '../componentes/Cabecalho'
 import { Carregando, Vazio } from '../componentes/Carregando'
@@ -34,12 +34,13 @@ export default function CaixaEntrada() {
     return () => { vivo = false }
   }, [avisar])
 
-  const pendentes = (itens ?? []).filter((i) => i.status === 'pendente').sort((a, b) => (a.recebido_em < b.recebido_em ? 1 : -1))
-  const resolvidos = (itens ?? []).filter((i) => i.status !== 'pendente').sort((a, b) => (a.recebido_em < b.recebido_em ? 1 : -1))
+  const ehPendente = (i: ItemCaixaEntrada) => i.status === 'pendente' || i.status === 'aguardando_nota'
+  const pendentes = (itens ?? []).filter(ehPendente).sort((a, b) => (a.recebido_em < b.recebido_em ? 1 : -1))
+  const resolvidos = (itens ?? []).filter((i) => !ehPendente(i)).sort((a, b) => (a.recebido_em < b.recebido_em ? 1 : -1))
 
   useEffect(() => { if (itens) setPendentesCaixa(pendentes.length) }, [itens, pendentes.length, setPendentesCaixa])
 
-  async function resolver(item: ItemCaixaEntrada, acao: 'lancar' | 'ignorar', categoriaId?: string) {
+  async function resolver(item: ItemCaixaEntrada, acao: 'lancar' | 'ignorar', categoriaId?: string, destino?: DestinoNota) {
     if (ocupado) return
     setOcupado(item.id)
     const cat = categorias.find((c) => c.id === (categoriaId ?? item.sugestao_categoria))
@@ -51,9 +52,9 @@ export default function CaixaEntrada() {
       }, 260)
     }
     try {
-      const r = await api<ItemCaixaEntrada>('resolver_caixa_entrada', { id: item.id, acao_caixa: acao, categoria_id: acao === 'lancar' ? cat?.id : undefined })
+      const r = await api<ItemCaixaEntrada>('resolver_caixa_entrada', { id: item.id, acao_caixa: acao, categoria_id: acao === 'lancar' ? cat?.id : undefined, destino })
       marcarLocal(r.status ?? (acao === 'lancar' ? 'lançado' : 'ignorado'))
-      avisar(acao === 'lancar' ? `Lançado: ${moeda(item.valor)} em ${cat?.nome ?? 'despesa'}` : 'Item ignorado', { tipo: 'ok' })
+      avisar(destino === 'empresa' ? `Marcada como da empresa: ${item.estabelecimento}. A próxima nota desta loja já vai separada.` : acao === 'lancar' ? `Lançado: ${moeda(item.valor)} em ${cat?.nome ?? 'despesa'}` : 'Item ignorado', { tipo: 'ok' })
     } catch (e) {
       if (e instanceof ErroApi && e.offline) { avisar(e.message, { tipo: 'info', duracao: 6000 }); marcarLocal(acao === 'lancar' ? 'lançado' : 'ignorado') }
       else avisar(e instanceof Error ? e.message : 'Não foi possível resolver', { tipo: 'erro' })
@@ -78,7 +79,7 @@ export default function CaixaEntrada() {
 
       {itens === null ? <Carregando texto="Buscando os gastos capturados…" /> : lista.length === 0 ? (
         aba === 'pendentes' ? (
-          <Vazio icone="inbox" titulo="Tudo em dia" texto="Nenhum gasto esperando classificação. Os SMS e alertas do banco caem aqui sozinhos.">
+          <Vazio icone="inbox" titulo="Tudo em dia" texto="Nenhum gasto esperando classificação. Os SMS, alertas do banco e notas fiscais com CPF caem aqui sozinhos.">
             <Link to="/captura" className="btn btn-ghost"><Icone nome="smartphone" />Configurar a captura automática</Link>
           </Vazio>
         ) : <Vazio icone="list-checks" titulo="Nada resolvido ainda" texto="Os itens lançados ou ignorados aparecem aqui." />
@@ -96,6 +97,7 @@ export default function CaixaEntrada() {
               aoResolver={(cid) => resolver(item, 'lancar', cid)}
               aoOutras={() => setOutras(item)}
               aoIgnorar={() => resolver(item, 'ignorar')}
+              aoDestino={(d) => (d === 'familia' ? resolver(item, 'lancar', undefined, 'familia') : resolver(item, 'ignorar', undefined, d))}
             />
           ))}
         </div>

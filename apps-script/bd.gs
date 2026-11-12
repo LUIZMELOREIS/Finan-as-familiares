@@ -41,7 +41,8 @@ const ESQUEMA = {
     colunas: ['id', 'tipo_id', 'grupo_id', 'nome', 'icone', 'cor', 'tipo', 'fixa', 'orcamento_mensal', 'palavras_chave', 'grupo_analise', 'sensivel', 'oculta_cardapio', 'ativa'],
     numeros: ['orcamento_mensal'], booleanos: ['fixa', 'ativa', 'sensivel', 'oculta_cardapio'], cachear: true,
   },
-  RegrasLoja: { colunas: ['id', 'loja_normalizada', 'categoria_id', 'criado_por', 'criado_em', 'acertos'], numeros: ['acertos'], cachear: true },
+  // `destino` (familia/empresa/ignorar) e `cnpj` vêm do robô de notas fiscais; a regra por CNPJ vale mais que a por nome.
+  RegrasLoja: { colunas: ['id', 'loja_normalizada', 'categoria_id', 'criado_por', 'criado_em', 'acertos', 'destino', 'cnpj'], numeros: ['acertos'], cachear: true },
   Lancamentos: {
     colunas: ['id', 'data', 'competencia', 'tipo', 'valor', 'categoria_id', 'descricao', 'estabelecimento', 'forma_pgto', 'cartao_id', 'parcela', 'usuario_id', 'origem', 'anexo_url', 'status', 'hash_dedup', 'criado_em', 'editado_por', 'excluido', 'projeto_id'],
     numeros: ['valor'], booleanos: ['excluido'], datas: ['data'], cachear: true,
@@ -61,6 +62,11 @@ const ESQUEMA = {
   CaixaEntrada: {
     colunas: ['id', 'recebido_em', 'canal', 'texto_bruto', 'valor', 'estabelecimento', 'final_cartao', 'data_compra', 'sugestao_categoria', 'sugestoes', 'usuario_id', 'status', 'lancamento_id', 'hash_dedup'],
     numeros: ['valor'], listas: ['sugestoes'], datas: ['data_compra'], cachear: true,
+  },
+  // Robô de notas fiscais (docs/ROBO_NOTAS_FISCAIS.md): uma linha por nota; chave_acesso é a chave única. `itens` é JSON curto.
+  NotasFiscais: {
+    colunas: ['id', 'fonte', 'chave_acesso', 'id_portal', 'tp_doc', 'usuario_id', 'cnpj', 'emitente', 'data_emissao', 'valor', 'frete', 'desconto', 'forma_pgto', 'itens', 'situacao', 'destino', 'lancamento_id', 'caixa_id', 'lida_em', 'atualizada_em'],
+    numeros: ['valor', 'frete', 'desconto'], cachear: true,
   },
   Orcamento: { colunas: ['competencia', 'categoria_id', 'valor_planejado'], numeros: ['valor_planejado'], cachear: true },
   Projetos: {
@@ -93,7 +99,7 @@ const ESQUEMA = {
 };
 
 /** Ordem em que as abas são criadas na planilha. */
-const ORDEM_ABAS = ['Config', 'Usuarios', 'Tipos', 'Grupos', 'Categorias', 'RegrasLoja', 'Lancamentos', 'ContasFixas', 'ContasAPagar', 'Cartoes', 'CaixaEntrada', 'Orcamento', 'Projetos', 'Aportes', 'Decisoes', 'Votos', 'Alertas', 'Patrimonio', 'Avisos', 'Conversas', 'Telegram', 'Versiculos', 'Reunioes', 'Push', 'Log'];
+const ORDEM_ABAS = ['Config', 'Usuarios', 'Tipos', 'Grupos', 'Categorias', 'RegrasLoja', 'Lancamentos', 'ContasFixas', 'ContasAPagar', 'Cartoes', 'CaixaEntrada', 'NotasFiscais', 'Orcamento', 'Projetos', 'Aportes', 'Decisoes', 'Votos', 'Alertas', 'Patrimonio', 'Avisos', 'Conversas', 'Telegram', 'Versiculos', 'Reunioes', 'Push', 'Log'];
 
 /** Cache em memória válido só durante esta execução. */
 const _memoria = { planilha: null, abas: {}, dados: {} };
@@ -423,8 +429,8 @@ function removerLinhas(nome, filtro) {
 // ---------- Config (aba chave/valor) ----------
 
 /** Campos numéricos e booleanos da Config (os demais são texto). */
-const CONFIG_NUMEROS = ['dia_fechamento_mes', 'divisao_dar', 'divisao_poupar', 'divisao_viver', 'valor_gasto_grande'];
-const CONFIG_BOOLEANOS = ['fe_ativa', 'dependente_ve_salarios', 'junior_ve_salarios', 'rotina_vigia', 'rotina_quinzenal', 'rotina_fechamento', 'telegram_ativo'];
+const CONFIG_NUMEROS = ['dia_fechamento_mes', 'divisao_dar', 'divisao_poupar', 'divisao_viver', 'valor_gasto_grande', 'notas_limite_direto', 'notas_limite_grande'];
+const CONFIG_BOOLEANOS = ['fe_ativa', 'dependente_ve_salarios', 'junior_ve_salarios', 'rotina_vigia', 'rotina_quinzenal', 'rotina_fechamento', 'telegram_ativo', 'rotina_notas'];
 
 /** Valores padrão da Config (gravados em instalar()). */
 function configPadrao(sobrenome) {
@@ -448,6 +454,9 @@ function configPadrao(sobrenome) {
     rotina_quinzenal: true,
     rotina_fechamento: true,
     telegram_ativo: false,
+    rotina_notas: true,
+    notas_limite_direto: 500,
+    notas_limite_grande: 1500,
     url_planilha: '',
     url_pasta_drive: '',
   };

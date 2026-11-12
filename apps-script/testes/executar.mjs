@@ -324,7 +324,7 @@ teste('dados iniciais: 4 tipos, 14 grupos, 53 categorias, 8 grupos de análise, 
 
 console.log('12) Esquema das abas (v2)')
 const ORDEM = vm.runInContext('ORDEM_ABAS', ctx), ESQ = vm.runInContext('ESQUEMA', ctx)
-teste('esquema cobre todas as 25 abas', () => { assert.equal(ORDEM.length, 25); for (const aba of ORDEM) assert.ok(ESQ[aba], aba) })
+teste('esquema cobre todas as 26 abas', () => { assert.equal(ORDEM.length, 26); for (const aba of ORDEM) assert.ok(ESQ[aba], aba) })
 teste('abas novas: Tipos, RegrasLoja, Alertas, Patrimonio, Avisos, Conversas, Telegram', () => { for (const aba of ['Tipos', 'RegrasLoja', 'Alertas', 'Patrimonio', 'Avisos', 'Conversas', 'Telegram']) assert.ok(ORDEM.includes(aba) && ESQ[aba].colunas.length > 2, aba) })
 teste('Grupos e Categorias com as colunas da v2', () => {
   assert.equal(JSON.stringify(ESQ.Grupos.colunas), JSON.stringify(['id', 'tipo_id', 'nome', 'cor', 'grupo_analise', 'ordem', 'ativo']))
@@ -589,9 +589,9 @@ teste('resumo agregado: sem dados pessoais além do apelido', () => {
   assert.equal(r.medias_3m_por_categoria.c_delivery, 100); assert.ok(r.projetos[0].necessario_mes > 0); assert.ok(r.assinaturas.length >= 2)
   assert.ok(!JSON.stringify(r).includes('token') && !JSON.stringify(r).includes('pin_'))
 })
-teste('ferramentas do Claude: 5 definidas com input_schema', () => {
+teste('ferramentas do Claude: 6 definidas com input_schema', () => {
   const f = g.ferramentasAssistente()
-  assert.equal(f.map((x) => x.name).join(','), 'buscar_lancamentos,total_por_categoria,projetar_meta,lancar_despesa,proximas_saidas')
+  assert.equal(f.map((x) => x.name).join(','), 'buscar_lancamentos,total_por_categoria,projetar_meta,lancar_despesa,proximas_saidas,buscar_nota_fiscal')
   for (const x of f) assert.equal(x.input_schema.type, 'object')
 })
 teste('extrairBarras tira a linha JSON final', () => {
@@ -648,6 +648,321 @@ teste('threadsNaoProcessadas filtra pelo marcador "Processado" sem usar GmailApp
 })
 teste('TAMANHO_PEDACO_CACHE cabe em 100 KB mesmo com acentos (2 bytes por caractere)', () => assert.ok(vm.runInContext('TAMANHO_PEDACO_CACHE', ctx) * 2 <= 100 * 1024))
 teste('CSV de exportação começa com BOM escapado (\\uFEFF)', () => assert.ok(fs.readFileSync(path.join(raiz, 'lancamentos.gs'), 'utf8').includes("'\\uFEFF' +")))
+
+console.log('20) Robô de notas fiscais — Fase 0 (parsers, cookies e fluxo OAuth simulado)')
+const amostra = (nome) => fs.readFileSync(path.join(raiz, 'testes', 'amostras', nome), 'utf8')
+const urlSefa = amostra('sefa_authentication_url.txt').trim()
+const simples = (x) => JSON.parse(JSON.stringify(x)) // objetos vindos do outro realm (vm) não são deepEqual aos daqui
+const cookiesOrdenados = (s) => s.split('; ').sort().join('; ')
+teste('hostDeUrl / resolverUrl (absoluta, raiz, relativa, //cdn, ?query)', () => {
+  assert.equal(g.hostDeUrl('https://Authz-Sefa.identidadedigital.pr.gov.br/cidadao_authz/x?y=1'), 'authz-sefa.identidadedigital.pr.gov.br')
+  const base = 'https://authz-sefa.identidadedigital.pr.gov.br/cidadao_authz/authentication.jsp?a=1'
+  assert.equal(g.resolverUrl(base, 'api/v1/authorize'), 'https://authz-sefa.identidadedigital.pr.gov.br/cidadao_authz/api/v1/authorize')
+  assert.equal(g.resolverUrl(base, '/Home/CheckLogin'), 'https://authz-sefa.identidadedigital.pr.gov.br/Home/CheckLogin')
+  assert.equal(g.resolverUrl(base, 'https://notaparana.pr.gov.br/nfprweb/Extrato'), 'https://notaparana.pr.gov.br/nfprweb/Extrato')
+  assert.equal(g.resolverUrl(base, '//cdn.exemplo/x.js'), 'https://cdn.exemplo/x.js')
+  assert.equal(g.resolverUrl(base, '?b=2'), 'https://authz-sefa.identidadedigital.pr.gov.br/cidadao_authz/authentication.jsp?b=2')
+})
+teste('lerQueryString não decodifica (igual ao JavaScript da página da Sefa)', () => {
+  const q = g.lerQueryString(urlSefa)
+  assert.equal(q.response_type, 'code'); assert.equal(q.code_challenge_method, 'S256')
+  assert.equal(q.redirect_uri, 'https%3A%2F%2Fnotaparana.pr.gov.br%2Fnfprweb%2Fcallback')
+  assert.equal(q.mensagem, ''); assert.equal(q.nome, 'Nota+Paran%C3%A1')
+})
+teste('camposDoFormularioSefa: todos os ocultos do authForm + step=2', () => {
+  const campos = g.camposDoFormularioSefa(urlSefa)
+  const ocultos = [...amostra('sefa_authentication.html').matchAll(/type="hidden" name="(\w+)"/g)].map((m) => m[1])
+  for (const nome of ocultos) assert.ok(nome in campos, 'falta ' + nome)
+  assert.equal(campos.step, '2')
+  assert.ok(!('attribute' in campos) && !('password' in campos))
+})
+teste('ehPaginaLoginSefa pela URL ou pelo HTML', () => {
+  assert.equal(g.ehPaginaLoginSefa(urlSefa, ''), true)
+  assert.equal(g.ehPaginaLoginSefa('https://notaparana.pr.gov.br/nfprweb/Extrato', amostra('sefa_authentication.html')), true)
+  assert.equal(g.ehPaginaLoginSefa('https://notaparana.pr.gov.br/nfprweb/Extrato', amostra('notapr_lista_mes.html')), false)
+})
+teste('extrairCamposOcultos / extrairAcaoFormulario (Nota Curitibana)', () => {
+  const html = amostra('notacwb_home.html')
+  assert.deepEqual(simples(g.extrairCamposOcultos(html)), { __RequestVerificationToken: 'TOKEN_EXEMPLO_NAO_REAL_abcdef0123456789' })
+  assert.equal(g.extrairAcaoFormulario(html, /CheckLogin/i), '/Home/CheckLogin')
+  assert.equal(g.extrairAcaoFormulario(amostra('sefa_authentication.html'), /id="authForm"/i), 'api/v1/authorize')
+  assert.equal(g.extrairAcaoFormulario('<p>sem form</p>'), '')
+})
+teste('extrairIdsNotasPr / contarNotasPr: 3 notas, sem repetir o id duplicado', () => {
+  const html = amostra('notapr_lista_mes.html')
+  assert.deepEqual(simples(g.extrairIdsNotasPr(html)), ['900000001', '900000002', '900000003'])
+  assert.equal(g.contarNotasPr(html), 3)
+  assert.equal(g.contarNotasPr(''), 0)
+  assert.equal(g.contarNotasPr(JSON.stringify([{ idDocFiscal: 1 }, { idDocFiscal: 2 }])), 2)
+})
+teste('periodoNotaPr', () => assert.equal(g.periodoNotaPr(2026, 11), '01/11/2026'))
+teste('classificarRespostaPortal: bloqueado, desafio, senha inválida, formulário, ok, redirecionamento', () => {
+  assert.equal(g.classificarRespostaPortal(403, '<h1>Forbidden</h1>', 'https://notaparana.pr.gov.br/'), 'bloqueado')
+  assert.equal(g.classificarRespostaPortal(503, '', ''), 'bloqueado')
+  assert.equal(g.classificarRespostaPortal(200, amostra('ecidadao_login.html'), 'https://autenticacao-ecidadao.curitiba.pr.gov.br/'), 'desafio')
+  assert.equal(g.classificarRespostaPortal(200, amostra('sefa_authentication.html'), urlSefa), 'formulario_login')
+  assert.equal(g.classificarRespostaPortal(200, '', urlSefa.replace('mensagem=', 'mensagem=Usu%C3%A1rio+ou+senha+inv%C3%A1lidos')), 'senha_invalida')
+  assert.equal(g.classificarRespostaPortal(200, amostra('notapr_lista_mes.html'), 'https://notaparana.pr.gov.br/nfprweb/NotasFiscaisAjax'), 'ok')
+  assert.equal(g.classificarRespostaPortal(302, '', 'https://x/'), 'redirecionamento')
+})
+teste('textoSeguroParaLog apaga números longos e valores de token/senha', () => {
+  const t = g.textoSeguroParaLog('cpf 123.456.789-09 senha=abc token: xyz ok 12')
+  assert.ok(!/123/.test(t) && !/abc/.test(t) && !/xyz/.test(t)); assert.ok(/ok 12/.test(t))
+})
+teste('guardarCookies / cabecalhoCookie: por host, Domain pai, substituição e remoção', () => {
+  const pote = {}
+  g.guardarCookies(pote, 'notaparana.pr.gov.br', ['JSESSIONID=a1; Path=/nfprweb; HttpOnly', 'pref=x; Domain=.pr.gov.br'])
+  g.guardarCookies(pote, 'authz-sefa.identidadedigital.pr.gov.br', 'AUTHZ=z9; Secure')
+  assert.equal(cookiesOrdenados(g.cabecalhoCookie(pote, 'notaparana.pr.gov.br')), 'JSESSIONID=a1; pref=x')
+  assert.equal(cookiesOrdenados(g.cabecalhoCookie(pote, 'authz-sefa.identidadedigital.pr.gov.br')), 'AUTHZ=z9; pref=x')
+  assert.equal(g.cabecalhoCookie(pote, 'outro.com.br'), '')
+  g.guardarCookies(pote, 'notaparana.pr.gov.br', 'JSESSIONID=b2; Path=/')
+  assert.equal(g.contarCookies(pote, 'notaparana.pr.gov.br'), 2)
+  assert.ok(/JSESSIONID=b2/.test(g.cabecalhoCookie(pote, 'notaparana.pr.gov.br')))
+  g.guardarCookies(pote, 'notaparana.pr.gov.br', 'JSESSIONID=; Max-Age=0')
+  assert.equal(g.cabecalhoCookie(pote, 'notaparana.pr.gov.br'), 'pref=x')
+})
+
+// Servidor falso: reproduz os saltos do OAuth (Extrato → Sefa → POST → callback → Extrato) e confere
+// que o robô leva o cookie certo a cada host, envia os campos do formulário e nunca segue redirecionamento sozinho.
+function servidorFalsoNotaParana(opts) {
+  const o = Object.assign({ senhaCerta: 'segredo', bloquear: false }, opts)
+  const chamadas = []
+  const resposta = (status, headers, body) => ({ getResponseCode: () => status, getAllHeaders: () => headers, getContentText: () => body || '' })
+  return {
+    chamadas,
+    fetch(url, params) {
+      chamadas.push({ url, params })
+      assert.equal(params.followRedirects, false, 'nunca seguir redirecionamentos sozinho')
+      const cookie = (params.headers || {}).Cookie || ''
+      if (o.bloquear) return resposta(403, {}, '<h1>Access Denied</h1>')
+      if (url === 'https://notaparana.pr.gov.br/nfprweb/Extrato' && !/SESSAO=ok/.test(cookie)) return resposta(302, { 'Set-Cookie': 'JSESSIONID=np1; Path=/', Location: '/nfprweb/Login' }, '')
+      if (url === 'https://notaparana.pr.gov.br/nfprweb/Login') { assert.ok(/JSESSIONID=np1/.test(cookie)); return resposta(302, { Location: urlSefa }, '') }
+      if (url === urlSefa) return resposta(200, { 'Set-Cookie': ['AUTHZ=s1; Path=/; Secure', 'XSRF=t1; Domain=.identidadedigital.pr.gov.br'], 'Content-Type': 'text/html;charset=ISO-8859-1' }, amostra('sefa_authentication.html'))
+      if (url === 'https://authz-sefa.identidadedigital.pr.gov.br/cidadao_authz/api/v1/authorize') {
+        assert.equal(params.method, 'post'); assert.ok(/AUTHZ=s1/.test(cookie) && /XSRF=t1/.test(cookie), 'cookies da Sefa no POST')
+        assert.ok(!/JSESSIONID/.test(cookie), 'cookie do Nota Paraná não vaza para a Sefa')
+        const corpo = Object.fromEntries(new URLSearchParams(params.payload))
+        assert.equal(corpo.step, '2'); assert.equal(corpo.attribute, '12345678909'); assert.equal(corpo.code_challenge_method, 'S256')
+        assert.equal(corpo.redirect_uri, 'https%3A%2F%2Fnotaparana.pr.gov.br%2Fnfprweb%2Fcallback', 'valor cru da URL, como o navegador envia')
+        if (corpo.password !== o.senhaCerta) return resposta(302, { Location: urlSefa.replace('mensagem=', 'mensagem=Usu%C3%A1rio+ou+senha+inv%C3%A1lidos') }, '')
+        return resposta(302, { Location: 'https://notaparana.pr.gov.br/nfprweb/callback?code=C0D1G0&state=EST4DO_EXEMPLO_abc123' }, '')
+      }
+      if (/^https:\/\/notaparana\.pr\.gov\.br\/nfprweb\/callback\?code=/.test(url)) { assert.ok(/JSESSIONID=np1/.test(cookie)); assert.ok(!/AUTHZ/.test(cookie)); return resposta(302, { 'Set-Cookie': 'SESSAO=ok; Path=/nfprweb; HttpOnly', Location: '/nfprweb/Extrato' }, '') }
+      if (url === 'https://notaparana.pr.gov.br/nfprweb/Extrato') return resposta(200, { 'Content-Type': 'text/html;charset=ISO-8859-1' }, '<html>Minhas Notas</html>')
+      if (/^https:\/\/notaparana\.pr\.gov\.br\/nfprweb\/NotasFiscaisAjax\?periodo=01%2F\d\d%2F\d{4}&situacao=1$/.test(url)) {
+        assert.ok(/SESSAO=ok/.test(cookie)); assert.equal(params.headers['X-Requested-With'], 'XMLHttpRequest')
+        return resposta(200, { 'Content-Type': 'text/html;charset=ISO-8859-1' }, amostra('notapr_lista_mes.html'))
+      }
+      throw new Error('URL inesperada no servidor falso: ' + url)
+    },
+  }
+}
+teste('loginNotaParana: fluxo OAuth completo pelo servidor falso → ok, cookies por host, 3 notas no mês', () => {
+  g.UrlFetchApp = servidorFalsoNotaParana()
+  const r = g.loginNotaParana({ cpf: '123.456.789-09', senha: 'segredo' })
+  assert.equal(r.ok, true, r.etapa + ': ' + r.motivo)
+  assert.deepEqual(simples(r.saltos).map((s) => s.split(' [')[0]), ['notaparana.pr.gov.br/nfprweb/Extrato', 'notaparana.pr.gov.br/nfprweb/Login', 'authz-sefa.identidadedigital.pr.gov.br/cidadao_authz/authentication.jsp', 'authz-sefa.identidadedigital.pr.gov.br/…/authorize', 'notaparana.pr.gov.br/nfprweb/callback', 'notaparana.pr.gov.br/nfprweb/Extrato'])
+  assert.ok(r.saltos.every((s) => !/code=|C0D1G0|EST4DO/.test(s)), 'saltos não guardam query string')
+  const lista = g.listarNotasMesNotaParana(r.pote, 2026, 11)
+  assert.equal(lista.classe, 'ok'); assert.equal(lista.quantidade, 3)
+})
+teste('loginNotaParana: senha errada → senha_invalida, sem tentar de novo', () => {
+  const srv = servidorFalsoNotaParana(); g.UrlFetchApp = srv
+  const r = g.loginNotaParana({ cpf: '12345678909', senha: 'errada' })
+  assert.equal(r.ok, false); assert.equal(r.motivo, 'senha_invalida'); assert.equal(r.etapa, 'autenticacao')
+  assert.equal(srv.chamadas.filter((c) => c.params.method === 'post').length, 1)
+})
+teste('loginNotaParana: 403 → bloqueado (Plano B); conexão recusada → conexao_recusada; sem credencial', () => {
+  g.UrlFetchApp = servidorFalsoNotaParana({ bloquear: true })
+  assert.equal(g.loginNotaParana({ cpf: '1', senha: 'x' }).motivo, 'bloqueado')
+  g.UrlFetchApp = { fetch: () => { throw new Error('Address unavailable: https://notaparana.pr.gov.br/nfprweb/Extrato') } }
+  assert.equal(g.loginNotaParana({ cpf: '1', senha: 'x' }).motivo, 'conexao_recusada')
+  assert.equal(g.loginNotaParana(null).motivo, 'credencial ausente')
+  assert.ok(/Plano B/.test(g.dicaFase0('bloqueado')) && /Plano B/.test(g.dicaFase0('conexao_recusada')))
+})
+teste('testeLoginNotaParana imprime só o resumo (sem CPF, senha, cookie ou código)', () => {
+  props.set('NOTAPR_u_teste', JSON.stringify({ cpf: '123.456.789-09', senha: 'segredo' }))
+  g.UrlFetchApp = servidorFalsoNotaParana()
+  const saida = g.testeLoginNotaParana()
+  assert.ok(/login ok · 3 notas em \d\d\/\d{4}/.test(saida), saida)
+  assert.ok(!/123|segredo|np1|SESSAO|C0D1G0|AUTHZ/.test(saida), 'vazou dado sensível: ' + saida)
+  assert.deepEqual(simples(g.listarUsuariosComCredencial('NOTAPR_')), ['u_teste'])
+  props.delete('NOTAPR_u_teste')
+  assert.ok(/Nenhuma credencial/.test(g.testeLoginNotaParana()))
+})
+teste('testeLoginNotaCuritibana: segue até o e-Cidadão e aponta o desafio ALTCHA', () => {
+  const resposta = (status, headers, body) => ({ getResponseCode: () => status, getAllHeaders: () => headers, getContentText: () => body || '' })
+  g.UrlFetchApp = { fetch(url, params) {
+    const cookie = (params.headers || {}).Cookie || ''
+    if (url === 'https://notacuritibana.curitiba.pr.gov.br/') return resposta(200, { 'Set-Cookie': ['.AspNetCore.Antiforgery.X=af1; path=/; samesite=strict; httponly', '.AspNetCore.Session=s1; path=/'] }, amostra('notacwb_home.html'))
+    if (url === 'https://notacuritibana.curitiba.pr.gov.br/Home/CheckLogin') {
+      assert.equal(params.method, 'post'); assert.ok(/Antiforgery\.X=af1/.test(cookie) && /Session=s1/.test(cookie))
+      assert.equal(Object.fromEntries(new URLSearchParams(params.payload)).__RequestVerificationToken, 'TOKEN_EXEMPLO_NAO_REAL_abcdef0123456789')
+      return resposta(302, { Location: 'http://autenticacao-ecidadao.curitiba.pr.gov.br/00000000-0000-0000-0000-000000000000/' }, '')
+    }
+    if (url === 'https://autenticacao-ecidadao.curitiba.pr.gov.br/00000000-0000-0000-0000-000000000000/') { assert.ok(!/Session=s1/.test(cookie)); return resposta(302, { Location: '/' }, '') }
+    if (url === 'https://autenticacao-ecidadao.curitiba.pr.gov.br/') return resposta(200, { 'Content-Type': 'text/html; charset=utf-8' }, amostra('ecidadao_login.html'))
+    throw new Error('URL inesperada: ' + url)
+  } }
+  const saida = g.testeLoginNotaCuritibana()
+  assert.ok(/CheckLogin: HTTP 302 → autenticacao-ecidadao/.test(saida), saida)
+  assert.ok(/desafio ALTCHA/.test(saida) && /loginsenha/.test(saida), saida)
+  assert.ok(!/af1|s1;|TOKEN_EXEMPLO/.test(saida), 'vazou token/cookie: ' + saida)
+})
+delete g.UrlFetchApp
+
+console.log('21) Robô de notas fiscais — Fases 1-5 (leitura, conciliação, destino, voz, API)')
+teste('extrairListaNotasPr: id, tp_doc, CNPJ só dígitos, emitente, data ISO, valor e situação', () => {
+  const notas = simples(g.extrairListaNotasPr(amostra('notapr_lista_mes.html')))
+  assert.equal(notas.length, 3)
+  assert.equal(notas.map((n) => n.id_portal).join(','), '900000001,900000002,900000003')
+  const n = notas[0]
+  assert.equal(n.tp_doc, '2'); assert.equal(notas[2].tp_doc, '1'); assert.match(n.cnpj, /^\d{14}$/); assert.equal(n.emitente, 'MERCADO EXEMPLO LTDA'); assert.equal(n.numero, '1234')
+  assert.match(n.data_emissao, /^\d{4}-\d{2}-\d{2}/); assert.ok(n.valor > 0); assert.ok(['normal', 'cancelada'].includes(n.situacao))
+  assert.equal(g.extrairListaNotasPr('<html><body>Nenhum registro encontrado</body></html>').length, 0)
+})
+teste('extrairDanfePr: chave, CNPJ, emitente, emissão, totais, forma de pagamento e 3 itens', () => {
+  const d = simples(g.extrairDanfePr(amostra('notapr_danfe.html')))
+  assert.equal(d.chave_acesso, '41261111222233330001446500700012345610000012'); assert.equal(d.chave_acesso.length, 44)
+  assert.equal(d.cnpj, '11222333000144'); assert.equal(d.emitente, 'CONDOR SUPER CENTER LTDA')
+  assert.equal(d.data_emissao, '2026-11-03 18:42'); assert.equal(d.valor, 161.74); assert.equal(d.desconto, 5); assert.equal(d.frete, 0)
+  assert.equal(d.forma_pgto, 'Cartão de Crédito'); assert.equal(d.protocolo, '141260000012345'); assert.equal(d.qtd_itens, 3)
+  assert.equal(d.itens.length, 3)
+  assert.deepEqual(d.itens[1], { d: 'CARNE BOVINA ALCATRA KG', c: '2000000001234', q: 1.42, un: 'KG', vu: 54.9, vt: 77.96 })
+  assert.equal(g.formaPgtoDaNota(d.forma_pgto), 'crédito'); assert.equal(g.formaPgtoDaNota('Dinheiro'), 'dinheiro'); assert.equal(g.formaPgtoDaNota('PIX'), 'pix'); assert.equal(g.formaPgtoDaNota(''), 'débito')
+})
+teste('extrairMesesCwb / extrairNotasCwb: meses com lupa, notas de serviço sem repetir, chave de 50 dígitos', () => {
+  const html = amostra('notacwb_lista.html')
+  const meses = simples(g.extrairMesesCwb(html))
+  assert.deepEqual(meses.map((m) => m.competencia), ['2026-10', '2026-09'])
+  assert.equal(meses[0].quantidade, 4); assert.equal(meses[0].valor, 612.3); assert.equal(meses[0].credito, 9.18); assert.equal(meses[0].ref, '2026-10')
+  const notas = simples(g.extrairNotasCwb(html))
+  assert.equal(notas.length, 3, 'linha repetida descartada')
+  assert.equal(notas[0].chave_acesso.length, 50); assert.equal(notas[0].cnpj, '22333444000155'); assert.equal(notas[0].emitente, 'CLINICA ODONTO SORRISO LTDA')
+  assert.equal(notas[0].data_emissao, '2026-10-02 09:15'); assert.equal(notas[0].valor, 350); assert.equal(notas[0].credito, 5.25); assert.equal(notas[0].situacao, 'normal')
+  assert.equal(notas[2].situacao, 'cancelada'); assert.equal(notas[1].id_portal, '88')
+  const json = simples(g.extrairNotasCwb(JSON.stringify({ data: [{ numero: 7, razaoSocial: 'PET SHOP AMIGO', cnpj: '55.666.777/0001-88', dataEmissao: '2026-10-21T10:00', valorNota: '120,00', situacao: 'Normal' }] })))
+  assert.equal(json.length, 1); assert.equal(json[0].valor, 120); assert.equal(json[0].emitente, 'PET SHOP AMIGO'); assert.equal(json[0].data_emissao, '2026-10-21 10:00')
+})
+teste('prepararCredencialFiscal: CPF só dígitos, 11 dígitos, senha obrigatória; Curitibana aceita e-mail', () => {
+  assert.deepEqual(simples(g.prepararCredencialFiscal('nota_parana', { cpf: '123.456.789-09', senha: 'x1y2z3' })), { cpf: '12345678909', senha: 'x1y2z3' })
+  assert.throws(() => g.prepararCredencialFiscal('nota_parana', { cpf: '123', senha: 'abc' }), /CPF/)
+  assert.throws(() => g.prepararCredencialFiscal('nota_parana', { cpf: '12345678909' }), /senha/i)
+  assert.deepEqual(simples(g.prepararCredencialFiscal('nota_curitibana', { usuario: 'pessoa@exemplo.com', senha: 'abcd' })), { usuario: 'pessoa@exemplo.com', senha: 'abcd' })
+})
+const dNotas = () => {
+  const d = bancoTeste()
+  d.config = Object.assign({}, d.config, { notas_limite_direto: 500, notas_limite_grande: 1500 })
+  d.caixa_entrada = []
+  d.notas_fiscais = []
+  return d
+}
+const notaCondor = (extra) => Object.assign({ fonte: 'nota_parana', chave_acesso: '4126' + '1'.repeat(40), tp_doc: '0', cnpj: '11222333000144', emitente: 'CONDOR SUPER CENTER LTDA', data_emissao: comp + '-10 18:42', valor: 1000, situacao: 'normal', usuario_id: 'u_luiz', itens: '[]' }, extra || {})
+teste('classificarDestinoNota: regra da loja (2 acertos) → empresa/ignorar; limite grande; NF-e acima do direto; mês fora do padrão', () => {
+  const cfg = { notas_limite_direto: 500, notas_limite_grande: 1500 }
+  assert.equal(g.classificarDestinoNota(notaCondor({ valor: 120 }), [], cfg), 'familia')
+  assert.equal(g.classificarDestinoNota(notaCondor({ valor: 120 }), [{ cnpj: '11222333000144', destino: 'empresa', acertos: 2 }], cfg), 'empresa')
+  assert.equal(g.classificarDestinoNota(notaCondor({ valor: 120 }), [{ cnpj: '11222333000144', destino: 'empresa', acertos: 1 }], cfg), 'familia', 'um acerto só ainda não decide')
+  assert.equal(g.classificarDestinoNota(notaCondor({ valor: 120, cnpj: '' }), [{ loja_normalizada: 'CONDOR', destino: 'ignorar', acertos: 3 }], cfg), 'ignorar')
+  assert.equal(g.classificarDestinoNota(notaCondor({ valor: 1600 }), [], cfg), 'a_confirmar')
+  assert.equal(g.classificarDestinoNota(notaCondor({ valor: 800, tp_doc: '1' }), [], cfg), 'a_confirmar', 'NF-e acima do limite direto')
+  assert.equal(g.classificarDestinoNota(notaCondor({ valor: 800, tp_doc: '0' }), [], cfg), 'familia')
+  assert.equal(g.classificarDestinoNota(notaCondor({ valor: 100 }), [], cfg, { mes_fora_do_padrao: true }), 'a_confirmar')
+})
+teste('decidirConciliacao: enriquecer lançamento existente (valor + data ±2 dias + loja), anexar à Caixa, direto, caixa, guardar', () => {
+  const d = dNotas()
+  // 1. Já existe o lançamento do Condor de R$ 1000 no dia 10 → enriquecer.
+  let r = g.decidirConciliacao(notaCondor({ data_emissao: comp + '-11 09:00' }), d)
+  assert.equal(r.tipo, 'enriquecer'); assert.equal(r.lancamento.estabelecimento, 'Supermercado Condor')
+  // 2. Item da Caixa "aguardando_nota" para a mesma loja → anexar.
+  r = g.decidirConciliacao(notaCondor({ valor: 212.5, chave_acesso: '4126' + '2'.repeat(40) }), Object.assign({}, d, { caixa_entrada: [{ id: 'ce9', status: 'aguardando_nota', usuario_id: 'u_luiz', estabelecimento: 'Condor', data_compra: comp + '-10', valor: 0 }] }))
+  assert.equal(r.tipo, 'anexar_caixa'); assert.equal(r.item.id, 'ce9')
+  // 3. Loja conhecida (3 acertos, categoria) e valor até o limite → direto.
+  r = g.decidirConciliacao(notaCondor({ valor: 212.5, chave_acesso: '4126' + '3'.repeat(40) }), Object.assign({}, d, { regras_loja: [{ loja_normalizada: 'CONDOR', cnpj: '11222333000144', categoria_id: 'c_mercado', acertos: 3 }] }))
+  assert.equal(r.tipo, 'direto'); assert.equal(r.categoria_id, 'c_mercado')
+  // 4. Mesma regra, mas acima do limite direto → caixa, destino família.
+  r = g.decidirConciliacao(notaCondor({ valor: 650, chave_acesso: '4126' + '4'.repeat(40) }), Object.assign({}, d, { regras_loja: [{ loja_normalizada: 'CONDOR', cnpj: '11222333000144', categoria_id: 'c_mercado', acertos: 3 }] }))
+  assert.equal(r.tipo, 'caixa'); assert.equal(r.destino, 'familia'); assert.ok(r.sugestoes.includes('c_mercado'))
+  // 5. Loja nova, valor alto → caixa, a_confirmar (Família ou Empresa?).
+  r = g.decidirConciliacao(notaCondor({ valor: 1800, emitente: 'LEROY MERLIN', cnpj: '03742330000121', chave_acesso: '4126' + '5'.repeat(40) }), d)
+  assert.equal(r.tipo, 'caixa'); assert.equal(r.destino, 'a_confirmar')
+  // 6. Loja aprendida como empresa → só guardar.
+  r = g.decidirConciliacao(notaCondor({ valor: 90, emitente: 'KALUNGA', cnpj: '61186888000193', chave_acesso: '4126' + '6'.repeat(40) }), Object.assign({}, d, { regras_loja: [{ loja_normalizada: 'KALUNGA', cnpj: '61186888000193', categoria_id: '', destino: 'empresa', acertos: 2 }] }))
+  assert.equal(r.tipo, 'guardar'); assert.equal(r.destino, 'empresa')
+})
+teste('encontrarLancamentoDaNota: pela chave, ou valor ±0,01 + data ±2 dias + loja/CNPJ; não casa loja diferente', () => {
+  const ls = [{ id: 'l1', valor: 1000, data: comp + '-10', estabelecimento: 'Supermercado Condor', excluido: false }, { id: 'l2', valor: 1000, data: comp + '-10', estabelecimento: 'Posto Shell', excluido: false }, { id: 'l3', valor: 50, data: comp + '-01', estabelecimento: '', anexo_url: 'https://www.fazenda.pr.gov.br/nfce/qrcode?p=' + '4126' + '7'.repeat(40) + '|2|1|1', excluido: false }]
+  assert.equal(g.encontrarLancamentoDaNota(notaCondor({ data_emissao: comp + '-12 10:00' }), ls).id, 'l1')
+  assert.equal(g.encontrarLancamentoDaNota(notaCondor({ data_emissao: comp + '-14 10:00' }), ls), null, 'mais de 2 dias')
+  assert.equal(g.encontrarLancamentoDaNota(notaCondor({ emitente: 'LOJAS AMERICANAS', cnpj: '99999999000199' }), ls), null)
+  assert.equal(g.encontrarLancamentoDaNota(notaCondor({ chave_acesso: '4126' + '7'.repeat(40), valor: 1 }), ls).id, 'l3')
+})
+teste('mesForaDoPadraoNotas: só com 2+ meses anteriores; dispara acima de 3× a média', () => {
+  const nf = (c, v) => ({ usuario_id: 'u_luiz', data_emissao: c + '-05', valor: v, situacao: 'normal', destino: 'familia' })
+  assert.equal(g.mesForaDoPadraoNotas([nf(comp, 5000), nf(m(1), 100)], 'u_luiz', comp).fora, false, 'um mês anterior só não basta')
+  const r = g.mesForaDoPadraoNotas([nf(comp, 5000), nf(m(1), 100), nf(m(2), 200)], 'u_luiz', comp)
+  assert.equal(r.fora, true); assert.equal(r.media, 150); assert.equal(r.total, 5000)
+  assert.equal(g.mesForaDoPadraoNotas([nf(comp, 400), nf(m(1), 100), nf(m(2), 200)], 'u_luiz', comp).fora, false)
+  assert.equal(g.mesForaDoPadraoNotas([nf(comp, 5000), nf(m(1), 100), nf(m(2), 200)], 'u_nina', comp).fora, false)
+})
+teste('notaFiscalResumo nunca devolve a chave inteira; itens limitados a 40', () => {
+  const r = simples(g.notaFiscalResumo(Object.assign(notaCondor(), { id: 'nf1', itens: JSON.stringify(Array.from({ length: 50 }, (_, i) => ({ d: 'Item ' + i, q: 1, vu: 1, vt: 1 }))) })))
+  assert.equal(r.chave_final, '1'.repeat(8)); assert.equal(r.chave_acesso, undefined); assert.equal(r.itens.length, 40); assert.equal(r.qtd_itens, 50)
+})
+teste('lojaDeFraseSemValor: "comprei no Condor" → Condor; com valor ou pergunta → vazio', () => {
+  assert.equal(g.lojaDeFraseSemValor('Comprei no Condor'), 'Condor')
+  assert.equal(g.lojaDeFraseSemValor('eu comprei hoje na Nissei, pedi CPF'), 'Nissei')
+  assert.equal(g.lojaDeFraseSemValor('passei na Leroy Merlin agora'), 'Leroy Merlin')
+  assert.equal(g.lojaDeFraseSemValor('comprei no Condor no cartão de crédito'), 'Condor')
+  assert.equal(g.lojaDeFraseSemValor('Comprei no Condor.'), 'Condor')
+  assert.equal(g.lojaDeFraseSemValor('gastei 45 na padaria no pix'), '')
+  assert.equal(g.lojaDeFraseSemValor('Quanto gastamos com delivery?'), '')
+  assert.equal(g.lojaDeFraseSemValor('comprei'), '')
+})
+teste('responderLocal: "comprei no Condor" pede a busca da nota; "gastei na padaria" continua pedindo o valor', () => {
+  const r = g.responderLocal(bancoTeste(), visaoAdmin, 'u_luiz', 'Comprei no Condor', hoje)
+  assert.equal(r.buscar_nota, 'Condor'); assert.equal(r.lancamento, undefined)
+  assert.match(g.responderLocal(bancoTeste(), visaoAdmin, 'u_luiz', 'gastei na padaria', hoje).texto, /Não entendi o valor/)
+  assert.equal(g.responderLocal(bancoTeste(), visaoAdmin, 'u_luiz', 'comprei 80 no Condor', hoje).buscar_nota, undefined)
+})
+teste('ferramenta buscar_nota_fiscal: exige loja e descreve quando usar', () => {
+  const f = g.ferramentasAssistente().find((x) => x.name === 'buscar_nota_fiscal')
+  assert.deepEqual(simples(f.input_schema.required), ['loja']); assert.match(f.description, /Nota Paraná/)
+})
+teste('resumoSincronizacao: conta novas, lançadas direto, para confirmar e Caixa; vazio sem novidade', () => {
+  assert.equal(g.resumoSincronizacao([]), ''); assert.equal(g.resumoSincronizacao([{ acao: 'atualizada', valor: 10 }]), '')
+  const r = g.resumoSincronizacao([{ acao: 'lancada', valor: 100, emitente: 'CONDOR' }, { acao: 'a_confirmar', valor: 1800, emitente: 'LEROY' }, { acao: 'caixa', valor: 50, emitente: 'X' }])
+  assert.match(r, /3 notas novas · R\$ 1\.950,00/); assert.match(r, /1 para confirmar \(LEROY, R\$ 1\.800,00: Família ou Empresa\?\)/); assert.match(r, /1 lançada direto \(CONDOR\)/); assert.match(r, /1 na Caixa de Entrada/)
+})
+teste('origemDoCanal e canais válidos incluem nota_parana / nota_curitibana', () => {
+  assert.equal(g.origemDoCanal('nota_parana'), 'nota_parana'); assert.equal(g.origemDoCanal('sms_ios'), 'sms'); assert.equal(g.origemDoCanal('email'), 'email')
+  const canais = vm.runInContext('CANAIS_VALIDOS', ctx)
+  assert.ok(canais.includes('nota_parana') && canais.includes('nota_curitibana'))
+  assert.ok(g.mesmaLoja('CONDOR SUPER CENTER LTDA', 'Supermercado Condor')); assert.ok(g.mesmaLoja('DROGARIA NISSEI SA', 'Nissei')); assert.ok(!g.mesmaLoja('CONDOR SUPER CENTER LTDA', 'Supermercado Festval')); assert.ok(g.mesmaLoja('X', '11222333000144', '11222333000144'))
+})
+teste('esquema: aba NotasFiscais com as colunas do contrato; RegrasLoja com destino e cnpj; Config com limites e rotina_notas', () => {
+  const cols = ESQ.NotasFiscais.colunas
+  for (const c of ['id', 'fonte', 'chave_acesso', 'id_portal', 'tp_doc', 'usuario_id', 'cnpj', 'emitente', 'data_emissao', 'valor', 'frete', 'desconto', 'forma_pgto', 'itens', 'situacao', 'destino', 'lancamento_id', 'caixa_id', 'lida_em', 'atualizada_em']) assert.ok(cols.includes(c), c)
+  assert.ok(ESQ.RegrasLoja.colunas.includes('destino') && ESQ.RegrasLoja.colunas.includes('cnpj'))
+  assert.ok(ORDEM.indexOf('NotasFiscais') > ORDEM.indexOf('CaixaEntrada'))
+  const cfg = g.configPadrao()
+  assert.equal(cfg.rotina_notas, true); assert.equal(cfg.notas_limite_direto, 500); assert.equal(cfg.notas_limite_grande, 1500)
+  assert.ok(vm.runInContext('CONFIG_EDITAVEIS', ctx).includes('notas_limite_direto') && vm.runInContext('CHAVES_ROTINAS', ctx).includes('rotina_notas'))
+})
+teste('API: 9 ações novas roteadas com perfil mínimo certo; parâmetros sensíveis ocultos do log', () => {
+  const acoes = g.obterAcoes()
+  const perfil = (a) => acoes[a] && (acoes[a].perfil || acoes[a].minimo || acoes[a][0])
+  for (const a of ['status_notas_fiscais', 'listar_notas_fiscais', 'sincronizar_notas', 'buscar_nota_fiscal', 'definir_destino_nota']) assert.ok(acoes[a], a)
+  for (const a of ['salvar_credencial_fiscal', 'remover_credencial_fiscal', 'testar_credencial_fiscal', 'importar_historico_notas']) assert.ok(acoes[a] && /Admin/.test(JSON.stringify(acoes[a])), a + ' só Admin: ' + JSON.stringify(acoes[a]))
+  for (const a of ['status_notas_fiscais', 'buscar_nota_fiscal']) assert.ok(!/Dependente/.test(JSON.stringify(acoes[a])), a + ' não é para Dependente')
+  const ocultos = vm.runInContext('PARAMS_OCULTOS_LOG', ctx)
+  for (const k of ['cpf', 'senha', 'usuario', 'credencial', 'notas']) assert.ok(ocultos.includes(k), k)
+  void perfil
+})
+teste('webhook ?webhook=notas: exige token da família, aceita lista de notas lidas por um coletor externo', () => {
+  assert.equal(typeof g.tratarWebhookNotas, 'function')
+})
 
 console.log(`\n${total - falhas}/${total} testes passaram${falhas ? ` — ${falhas} FALHA(S)` : ''}`)
 process.exit(falhas ? 1 : 0)

@@ -7,11 +7,15 @@
 export type Perfil = 'Administrador' | 'Adulto' | 'Dependente'
 export type TipoLancamento = 'receita' | 'despesa'
 export type FormaPgto = 'dinheiro' | 'pix' | 'débito' | 'crédito' | 'boleto'
-export type OrigemLancamento = 'manual' | 'foto' | 'voz' | 'chat' | 'sms' | 'email' | 'fatura' | 'recorrente' | 'telegram'
+export type OrigemLancamento = 'manual' | 'foto' | 'voz' | 'chat' | 'sms' | 'email' | 'fatura' | 'recorrente' | 'telegram' | 'nota_parana' | 'nota_curitibana'
 export type StatusLancamento = 'confirmado' | 'a_confirmar'
 export type StatusConta = 'aberta' | 'paga'
-export type CanalCaixa = 'sms_ios' | 'sms_android' | 'email' | 'fatura'
-export type StatusCaixa = 'pendente' | 'lançado' | 'duplicado' | 'ignorado'
+export type CanalCaixa = 'sms_ios' | 'sms_android' | 'email' | 'fatura' | 'nota_parana' | 'nota_curitibana'
+/** `aguardando_nota`: compra dita por voz ("comprei no Condor") esperando a nota fiscal aparecer no portal. */
+export type StatusCaixa = 'pendente' | 'lançado' | 'duplicado' | 'ignorado' | 'aguardando_nota'
+/** Fontes do robô de notas fiscais (docs/ROBO_NOTAS_FISCAIS.md). */
+export type FonteNota = 'nota_parana' | 'nota_curitibana'
+export type DestinoNota = 'familia' | 'empresa' | 'ignorar' | 'a_confirmar' | ''
 export type StatusProjeto = 'votação' | 'ativo' | 'concluído' | 'pausado'
 export type TipoDecisao = 'novo projeto' | 'gasto grande' | 'ajuste de orçamento'
 export type StatusDecisao = 'aberta' | 'aprovada' | 'recusada'
@@ -39,6 +43,9 @@ export interface Config {
   rotina_quinzenal: boolean
   rotina_fechamento: boolean
   telegram_ativo?: boolean
+  rotina_notas?: boolean // robô de notas fiscais (a cada 6 h e às 21h)
+  notas_limite_direto?: number // até este valor, loja conhecida lança direto (padrão 500)
+  notas_limite_grande?: number // acima disso, sempre pergunta Família × Empresa (padrão 1500)
   url_planilha?: string
   url_pasta_drive?: string
 }
@@ -107,6 +114,9 @@ export interface RegraLoja {
   criado_por: string
   criado_em: string
   acertos: number
+  /** Robô de notas: destino aprendido para a loja (familia · empresa · ignorar) e CNPJ do emitente. */
+  destino?: DestinoNota
+  cnpj?: string
 }
 
 /** Alerta personalizado ("Delivery acima de R$ 400/mês → avisar Luiz e Nina"). */
@@ -249,6 +259,70 @@ export interface ItemCaixaEntrada {
   usuario_id: string
   status: StatusCaixa
   lancamento_id?: string
+  nota?: NotaFiscalResumo // quando o item veio do robô de notas fiscais
+}
+
+/** Item de uma nota fiscal (descrição, código, quantidade, unidade, valor unitário e total). */
+export interface ItemNotaFiscal { d: string; c?: string; q: number; un?: string; vu: number; vt: number }
+
+/** Resumo público de uma nota da aba NotasFiscais — nunca a chave completa (só os 8 últimos dígitos). */
+export interface NotaFiscalResumo {
+  id: string
+  fonte: FonteNota
+  tp_doc: string // '0' NFC-e · '1' NF-e · '' serviço (Curitiba)
+  chave_final: string
+  cnpj: string
+  emitente: string
+  data_emissao: string // AAAA-MM-DDTHH:MM
+  valor: number
+  desconto: number
+  frete: number
+  forma_pgto: string
+  qtd_itens: number
+  itens: ItemNotaFiscal[]
+  situacao: 'normal' | 'cancelada' | string
+  destino: DestinoNota
+  usuario_id: string
+  lancamento_id: string
+  caixa_id: string
+}
+
+/** Conexão de um membro com uma fonte (status_notas_fiscais) — nunca a credencial. */
+export interface ConexaoNotas {
+  fonte: FonteNota
+  nome_fonte: string
+  usuario_id: string
+  conectado: boolean
+  conectado_em: string
+  ultima_leitura: string
+  ultimo_ok: string
+  notas_novas: number
+  suspenso: boolean
+  motivo: string
+  falhas: number
+  total_notas: number
+  restantes: number
+}
+
+export interface StatusNotasFiscais {
+  conexoes: ConexaoNotas[]
+  contagens: { total: number; mes: number; valor_mes: number; a_confirmar: number; empresa: number }
+  limites: { direto: number; grande: number }
+  rotina_ativa: boolean
+}
+
+/** Resultado de testar_credencial_fiscal / sincronizar_notas. */
+export interface ResultadoTesteNotas { ok: boolean; etapa?: string; motivo?: string; dica?: string; quantidade?: number; competencia?: string; texto?: string }
+export interface ResultadoSincronizacao { fonte: FonteNota; usuario_id: string; ok: boolean; motivo?: string; novas: number; lancadas: number; caixa: number; a_confirmar: number; enriquecidas: number; canceladas: number; restantes: number; resumo: string }
+
+/** Resposta de buscar_nota_fiscal ("comprei no Condor"). */
+export interface BuscaNotaFiscal {
+  status: 'lancado' | 'varias' | 'aguardando'
+  texto: string
+  lancamento?: Lancamento
+  nota?: NotaFiscalResumo
+  notas?: NotaFiscalResumo[]
+  item?: ItemCaixaEntrada
 }
 
 export interface Orcamento {

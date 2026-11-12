@@ -6,6 +6,7 @@
  *  - Autentica: token_familia (aba Config) → token do usuário (aba Usuarios) → aplica o perfil.
  *  - Responde sempre no envelope { ok, dados, erro, versao } em JSON.
  *  - `?webhook=1` (GET ou POST) vai para o webhook de SMS em sms.gs.
+ *  - `?webhook=notas` (POST) recebe notas fiscais de um coletor externo (Plano B) em notasFiscais.gs.
  *  - `?telegram=1` (POST) vai para o webhook do bot do Telegram em telegram.gs.
  *  - Ações de escrita são registradas na aba Log.
  *
@@ -20,7 +21,7 @@
 const NIVEL_PERFIL = { 'Dependente': 1, 'Júnior': 1, 'Adulto': 2, 'Administrador': 3 };
 
 /** Parâmetros que nunca vão para o Log (segredos e arquivos grandes). */
-const PARAMS_OCULTOS_LOG = ['token', 'token_familia', 'pin', 'imagem_base64', 'svg', 'texto', 'assinatura', 'mensagem', 'historico'];
+const PARAMS_OCULTOS_LOG = ['token', 'token_familia', 'pin', 'imagem_base64', 'svg', 'texto', 'assinatura', 'mensagem', 'historico', 'cpf', 'senha', 'usuario', 'credencial', 'notas'];
 
 /**
  * Tabela de ações: nome → { perfil mínimo (null = sem autenticação), fn(p, ctx), escrita }.
@@ -76,6 +77,17 @@ function obterAcoes() {
     resolver_caixa_entrada: { perfil: 'Dependente', fn: acaoResolverCaixaEntrada, escrita: true },
     importar_fatura: { perfil: 'Adulto', fn: acaoImportarFatura },
     confirmar_importacao: { perfil: 'Adulto', fn: acaoConfirmarImportacao, escrita: true },
+
+    // Robô de notas fiscais (Nota Paraná + Nota Curitibana) — docs/ROBO_NOTAS_FISCAIS.md
+    status_notas_fiscais: { perfil: 'Adulto', fn: acaoStatusNotasFiscais },
+    listar_notas_fiscais: { perfil: 'Adulto', fn: acaoListarNotasFiscais },
+    salvar_credencial_fiscal: { perfil: 'Administrador', fn: acaoSalvarCredencialFiscal, escrita: true },
+    remover_credencial_fiscal: { perfil: 'Administrador', fn: acaoRemoverCredencialFiscal, escrita: true },
+    testar_credencial_fiscal: { perfil: 'Administrador', fn: acaoTestarCredencialFiscal, escrita: true },
+    sincronizar_notas: { perfil: 'Adulto', fn: acaoSincronizarNotas, escrita: true },
+    buscar_nota_fiscal: { perfil: 'Adulto', fn: acaoBuscarNotaFiscal, escrita: true },
+    definir_destino_nota: { perfil: 'Adulto', fn: acaoDefinirDestinoNota, escrita: true },
+    importar_historico_notas: { perfil: 'Administrador', fn: acaoImportarHistoricoNotas, escrita: true },
 
     // Família: projetos, decisões, reunião
     listar_projetos: { perfil: 'Dependente', fn: acaoListarProjetos },
@@ -178,6 +190,7 @@ function tratarRequisicao(e, metodo) {
     if (String(parametrosUrl.telegram || '') === '1') return { ok: true, dados: tratarWebhookTelegram(e, parametrosUrl), versao: VERSAO_API };
     const params = extrairParametros(e, metodo);
     if (String(params.webhook || '') === '1') return { ok: true, dados: tratarWebhook(params), versao: VERSAO_API };
+    if (String(params.webhook || '') === 'notas') return { ok: true, dados: tratarWebhookNotas(params), versao: VERSAO_API };
     return executarAcao(params);
   } catch (erro) {
     return envelopeErro(erro);

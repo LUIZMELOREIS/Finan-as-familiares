@@ -138,6 +138,16 @@ Veja o [**GUIA_CAPTURA_SMS.md**](GUIA_CAPTURA_SMS.md) (iPhone com o app Atalhos,
 - **Rotinas automáticas** (ligue/desligue em Configurações → Rotinas e alertas): **vigia diário** às 20h (gasto fora do padrão, cobrança duplicada, assinatura nova, conta a vencer, gastos sem categoria), **análise quinzenal** (dias 1 e 16) e **fechamento do mês** (dia 1º: relatório, projeção de 3 meses e pauta da reunião, por e-mail aos administradores).
 - **Telegram:** no app Telegram, fale com **@BotFather** → `/newbot` → copie o token → cole em `TOKEN_TELEGRAM` nas Propriedades do script → rode `configurarTelegram()` no Apps Script. Cada membro vincula o próprio chat em **Configurações → Rotinas e alertas → Vincular meu Telegram** (envia `/start CÓDIGO` ao bot). Depois é só mandar "gastei 30 na padaria" ou a foto do cupom.
 
+### Parte 8 — Robô de notas fiscais: Nota Paraná e Nota Curitibana (opcional)
+
+Toda compra em que você **pede CPF na nota** entra sozinha no app, com loja, valor, data e itens — sem foto, sem SMS. Detalhes em [`docs/ROBO_NOTAS_FISCAIS.md`](docs/ROBO_NOTAS_FISCAIS.md).
+
+1. **Conectar cada adulto**: no app, o administrador abre **Configurações → Notas fiscais** e toca em **Conectar** ao lado do membro, informando o **CPF e a senha do portal** [notaparana.pr.gov.br](https://www.notaparana.pr.gov.br) (a mesma da Identidade Digital do Paraná). A senha fica só nas Propriedades do Apps Script (`NOTAPR_<usuario_id>`), nunca na planilha nem no app. Quem preferir pode criar a propriedade à mão no editor do Apps Script com o valor `{"cpf":"00000000000","senha":"…"}`.
+2. **Testar**: toque em **Testar**. O resultado diz `login ok · N notas no mês` ou o motivo (`senha_invalida`, `bloqueado`, `desafio`…). Na primeira vez, rode também `testeLoginNotaParana()` no editor do Apps Script e veja o log: se o portal **recusar a conexão vinda do Google** (`bloqueado`/`conexao_recusada`), o robô não consegue ler direto — é o **Plano B**: um coletor rodando no Brasil envia as notas para `<URL>?webhook=notas` (ver `docs/API.md`).
+3. **Pronto**: o robô lê o portal a cada 6 h e às 21h (ligue/desligue em Configurações → Notas fiscais). Loja conhecida e valor até R$ 500 lança direto; loja nova, valor alto ou nota de empresa pergunta **Família, Empresa ou Ignorar** na Caixa de entrada — e aprende para a próxima.
+4. **Por voz**: em **Lançar › Falar** ou no Assistente, diga **"comprei no Condor"**: o app busca a nota e responde "Condor, hoje 18:42, R$ 312,80, 23 itens. Lancei em Supermercado." Se a nota ainda não apareceu, a compra fica em espera e é completada à noite.
+5. **Nota Curitibana** (serviços em Curitiba): mesma tela, mas o login passa pelo e-Cidadão da Prefeitura, que pode exibir uma verificação (ALTCHA) que o robô não resolve sozinho; nesse caso ele avisa e suspende — a leitura de serviços fica para o Plano B.
+
 ---
 
 ## Estrutura do repositório
@@ -145,6 +155,7 @@ Veja o [**GUIA_CAPTURA_SMS.md**](GUIA_CAPTURA_SMS.md) (iPhone com o app Atalhos,
 ```
 app/                 PWA (React). `npm run dev`, `npm test`, `npm run build`, `npm run capturas`
 apps-script/         Back-end Google Apps Script (.gs) + README de publicação + testes das funções puras
+docs/ROBO_NOTAS_FISCAIS.md  Robô de notas fiscais (Nota Paraná + Nota Curitibana): especificação e fases
 dados/               Dados iniciais: grupos/categorias e versículos (fonte única para app e Apps Script)
 docs/API.md          Contrato da API
 docs/referencia/     Contrato visual (HTML de referência, prompt v2, renders 1440/390)
@@ -158,6 +169,7 @@ GUIA_CAPTURA_SMS.md  Passo a passo iPhone/Android para captura de SMS
 - A **chave do Claude** fica só nas Propriedades do script (nunca no app nem no Git).
 - Toda chamada exige o **token da família + token do usuário**; o perfil é validado **no servidor** (um Dependente não lê salários nem chamando a API direto).
 - **Nunca** guardamos número completo de cartão, CVV, senha ou códigos recebidos por SMS. Os SMS que não são de compra (códigos, propaganda) são descartados.
+- **CPF e senha do Nota Paraná / Nota Curitibana** ficam só nas Propriedades do script; a API nunca os devolve, o log os oculta e a planilha guarda da nota apenas o que a família precisa (loja, valor, itens; a chave de acesso completa só na aba `NotasFiscais`, e o app vê os 8 últimos dígitos).
 - Tudo é **soft delete**: nada some de verdade da planilha. Há **log de auditoria** (aba `Log`) e **backup semanal** automático em `Backups/`.
 
 ## Perguntas frequentes

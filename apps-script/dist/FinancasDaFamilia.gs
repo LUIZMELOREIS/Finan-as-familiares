@@ -2,7 +2,7 @@
  * Finanças da Família — back-end Google Apps Script (arquivo único).
  * Gerado por apps-script/testes/empacotar.mjs a partir dos arquivos em apps-script/*.gs.
  * Cole este arquivo inteiro no Código.gs do seu projeto e o appsscript.json no manifesto.
- * Gerado em 2026-10-22.
+ * Gerado em 2026-11-12.
  */
 
 // ==============================================================================
@@ -17,6 +17,7 @@
  *  - Autentica: token_familia (aba Config) → token do usuário (aba Usuarios) → aplica o perfil.
  *  - Responde sempre no envelope { ok, dados, erro, versao } em JSON.
  *  - `?webhook=1` (GET ou POST) vai para o webhook de SMS em sms.gs.
+ *  - `?webhook=notas` (POST) recebe notas fiscais de um coletor externo (Plano B) em notasFiscais.gs.
  *  - `?telegram=1` (POST) vai para o webhook do bot do Telegram em telegram.gs.
  *  - Ações de escrita são registradas na aba Log.
  *
@@ -31,7 +32,7 @@
 const NIVEL_PERFIL = { 'Dependente': 1, 'Júnior': 1, 'Adulto': 2, 'Administrador': 3 };
 
 /** Parâmetros que nunca vão para o Log (segredos e arquivos grandes). */
-const PARAMS_OCULTOS_LOG = ['token', 'token_familia', 'pin', 'imagem_base64', 'svg', 'texto', 'assinatura', 'mensagem', 'historico'];
+const PARAMS_OCULTOS_LOG = ['token', 'token_familia', 'pin', 'imagem_base64', 'svg', 'texto', 'assinatura', 'mensagem', 'historico', 'cpf', 'senha', 'usuario', 'credencial', 'notas'];
 
 /**
  * Tabela de ações: nome → { perfil mínimo (null = sem autenticação), fn(p, ctx), escrita }.
@@ -87,6 +88,17 @@ function obterAcoes() {
     resolver_caixa_entrada: { perfil: 'Dependente', fn: acaoResolverCaixaEntrada, escrita: true },
     importar_fatura: { perfil: 'Adulto', fn: acaoImportarFatura },
     confirmar_importacao: { perfil: 'Adulto', fn: acaoConfirmarImportacao, escrita: true },
+
+    // Robô de notas fiscais (Nota Paraná + Nota Curitibana) — docs/ROBO_NOTAS_FISCAIS.md
+    status_notas_fiscais: { perfil: 'Adulto', fn: acaoStatusNotasFiscais },
+    listar_notas_fiscais: { perfil: 'Adulto', fn: acaoListarNotasFiscais },
+    salvar_credencial_fiscal: { perfil: 'Administrador', fn: acaoSalvarCredencialFiscal, escrita: true },
+    remover_credencial_fiscal: { perfil: 'Administrador', fn: acaoRemoverCredencialFiscal, escrita: true },
+    testar_credencial_fiscal: { perfil: 'Administrador', fn: acaoTestarCredencialFiscal, escrita: true },
+    sincronizar_notas: { perfil: 'Adulto', fn: acaoSincronizarNotas, escrita: true },
+    buscar_nota_fiscal: { perfil: 'Adulto', fn: acaoBuscarNotaFiscal, escrita: true },
+    definir_destino_nota: { perfil: 'Adulto', fn: acaoDefinirDestinoNota, escrita: true },
+    importar_historico_notas: { perfil: 'Administrador', fn: acaoImportarHistoricoNotas, escrita: true },
 
     // Família: projetos, decisões, reunião
     listar_projetos: { perfil: 'Dependente', fn: acaoListarProjetos },
@@ -189,6 +201,7 @@ function tratarRequisicao(e, metodo) {
     if (String(parametrosUrl.telegram || '') === '1') return { ok: true, dados: tratarWebhookTelegram(e, parametrosUrl), versao: VERSAO_API };
     const params = extrairParametros(e, metodo);
     if (String(params.webhook || '') === '1') return { ok: true, dados: tratarWebhook(params), versao: VERSAO_API };
+    if (String(params.webhook || '') === 'notas') return { ok: true, dados: tratarWebhookNotas(params), versao: VERSAO_API };
     return executarAcao(params);
   } catch (erro) {
     return envelopeErro(erro);
@@ -349,6 +362,8 @@ function acaoPing(p) {
  *  - TOKEN_TELEGRAM: token do bot (opcional; ver telegram.gs).
  *  - URL_SERVICO_PUSH / TOKEN_SERVICO_PUSH: notificações push (opcional).
  *  - EMAILS_ADMIN: e-mails dos administradores para os resumos (opcional).
+ *  - NOTAPR_<usuario_id> / NOTACWB_<usuario_id>: credenciais do robô de notas fiscais (gravadas pelo app em
+ *    Configurações → Notas fiscais; só escrita, nunca devolvidas). Ver docs/ROBO_NOTAS_FISCAIS.md.
  *  - ID_PASTA / ID_PLANILHA: gravadas automaticamente por instalar() (ID_PASTA pode ser definida antes para escolher a pasta).
  */
 
@@ -660,7 +675,7 @@ const GATILHOS = [
 ];
 
 /** Gatilhos das rotinas que a família liga/desliga em Configurações. */
-const FUNCOES_ROTINAS = ['vigiaDiario', 'lembreteDiario', 'analiseQuinzenal', 'fechamentoDoMes'];
+const FUNCOES_ROTINAS = ['vigiaDiario', 'lembreteDiario', 'analiseQuinzenal', 'fechamentoDoMes', 'sincronizarNotasFiscais'];
 
 /** Remove todos os gatilhos deste projeto. */
 function desinstalar_gatilhos() {
@@ -692,7 +707,8 @@ function horaDe(horario, padrao) {
  *  - rotina_vigia ligada → vigiaDiario na hora do lembrete (padrão 20h), que inclui o lembrete diário;
  *    desligada → só lembreteDiario nessa hora;
  *  - rotina_quinzenal → analiseQuinzenal nos dias 1 e 16 às 7h;
- *  - rotina_fechamento → fechamentoDoMes no dia 1º às 6h.
+ *  - rotina_fechamento → fechamentoDoMes no dia 1º às 6h;
+ *  - rotina_notas → sincronizarNotasFiscais a cada 6 horas e uma passada fixa às 21h (robô de notas fiscais).
  */
 function instalarGatilhosRotinas(cfg) {
   const c = cfg || lerConfig();
@@ -704,6 +720,10 @@ function instalarGatilhosRotinas(cfg) {
     ScriptApp.newTrigger('analiseQuinzenal').timeBased().onMonthDay(16).atHour(7).create();
   }
   if (c.rotina_fechamento !== false) ScriptApp.newTrigger('fechamentoDoMes').timeBased().onMonthDay(1).atHour(6).create();
+  if (c.rotina_notas !== false) {
+    ScriptApp.newTrigger('sincronizarNotasFiscais').timeBased().everyHours(6).create();
+    ScriptApp.newTrigger('sincronizarNotasFiscais').timeBased().everyDays(1).atHour(21).create();
+  }
 }
 
 /** Compatibilidade com a v1: reinstala as rotinas com um novo horário de lembrete. */
@@ -1364,7 +1384,8 @@ const ESQUEMA = {
     colunas: ['id', 'tipo_id', 'grupo_id', 'nome', 'icone', 'cor', 'tipo', 'fixa', 'orcamento_mensal', 'palavras_chave', 'grupo_analise', 'sensivel', 'oculta_cardapio', 'ativa'],
     numeros: ['orcamento_mensal'], booleanos: ['fixa', 'ativa', 'sensivel', 'oculta_cardapio'], cachear: true,
   },
-  RegrasLoja: { colunas: ['id', 'loja_normalizada', 'categoria_id', 'criado_por', 'criado_em', 'acertos'], numeros: ['acertos'], cachear: true },
+  // `destino` (familia/empresa/ignorar) e `cnpj` vêm do robô de notas fiscais; a regra por CNPJ vale mais que a por nome.
+  RegrasLoja: { colunas: ['id', 'loja_normalizada', 'categoria_id', 'criado_por', 'criado_em', 'acertos', 'destino', 'cnpj'], numeros: ['acertos'], cachear: true },
   Lancamentos: {
     colunas: ['id', 'data', 'competencia', 'tipo', 'valor', 'categoria_id', 'descricao', 'estabelecimento', 'forma_pgto', 'cartao_id', 'parcela', 'usuario_id', 'origem', 'anexo_url', 'status', 'hash_dedup', 'criado_em', 'editado_por', 'excluido', 'projeto_id'],
     numeros: ['valor'], booleanos: ['excluido'], datas: ['data'], cachear: true,
@@ -1384,6 +1405,11 @@ const ESQUEMA = {
   CaixaEntrada: {
     colunas: ['id', 'recebido_em', 'canal', 'texto_bruto', 'valor', 'estabelecimento', 'final_cartao', 'data_compra', 'sugestao_categoria', 'sugestoes', 'usuario_id', 'status', 'lancamento_id', 'hash_dedup'],
     numeros: ['valor'], listas: ['sugestoes'], datas: ['data_compra'], cachear: true,
+  },
+  // Robô de notas fiscais (docs/ROBO_NOTAS_FISCAIS.md): uma linha por nota; chave_acesso é a chave única. `itens` é JSON curto.
+  NotasFiscais: {
+    colunas: ['id', 'fonte', 'chave_acesso', 'id_portal', 'tp_doc', 'usuario_id', 'cnpj', 'emitente', 'data_emissao', 'valor', 'frete', 'desconto', 'forma_pgto', 'itens', 'situacao', 'destino', 'lancamento_id', 'caixa_id', 'lida_em', 'atualizada_em'],
+    numeros: ['valor', 'frete', 'desconto'], cachear: true,
   },
   Orcamento: { colunas: ['competencia', 'categoria_id', 'valor_planejado'], numeros: ['valor_planejado'], cachear: true },
   Projetos: {
@@ -1416,7 +1442,7 @@ const ESQUEMA = {
 };
 
 /** Ordem em que as abas são criadas na planilha. */
-const ORDEM_ABAS = ['Config', 'Usuarios', 'Tipos', 'Grupos', 'Categorias', 'RegrasLoja', 'Lancamentos', 'ContasFixas', 'ContasAPagar', 'Cartoes', 'CaixaEntrada', 'Orcamento', 'Projetos', 'Aportes', 'Decisoes', 'Votos', 'Alertas', 'Patrimonio', 'Avisos', 'Conversas', 'Telegram', 'Versiculos', 'Reunioes', 'Push', 'Log'];
+const ORDEM_ABAS = ['Config', 'Usuarios', 'Tipos', 'Grupos', 'Categorias', 'RegrasLoja', 'Lancamentos', 'ContasFixas', 'ContasAPagar', 'Cartoes', 'CaixaEntrada', 'NotasFiscais', 'Orcamento', 'Projetos', 'Aportes', 'Decisoes', 'Votos', 'Alertas', 'Patrimonio', 'Avisos', 'Conversas', 'Telegram', 'Versiculos', 'Reunioes', 'Push', 'Log'];
 
 /** Cache em memória válido só durante esta execução. */
 const _memoria = { planilha: null, abas: {}, dados: {} };
@@ -1746,8 +1772,8 @@ function removerLinhas(nome, filtro) {
 // ---------- Config (aba chave/valor) ----------
 
 /** Campos numéricos e booleanos da Config (os demais são texto). */
-const CONFIG_NUMEROS = ['dia_fechamento_mes', 'divisao_dar', 'divisao_poupar', 'divisao_viver', 'valor_gasto_grande'];
-const CONFIG_BOOLEANOS = ['fe_ativa', 'dependente_ve_salarios', 'junior_ve_salarios', 'rotina_vigia', 'rotina_quinzenal', 'rotina_fechamento', 'telegram_ativo'];
+const CONFIG_NUMEROS = ['dia_fechamento_mes', 'divisao_dar', 'divisao_poupar', 'divisao_viver', 'valor_gasto_grande', 'notas_limite_direto', 'notas_limite_grande'];
+const CONFIG_BOOLEANOS = ['fe_ativa', 'dependente_ve_salarios', 'junior_ve_salarios', 'rotina_vigia', 'rotina_quinzenal', 'rotina_fechamento', 'telegram_ativo', 'rotina_notas'];
 
 /** Valores padrão da Config (gravados em instalar()). */
 function configPadrao(sobrenome) {
@@ -1771,6 +1797,9 @@ function configPadrao(sobrenome) {
     rotina_quinzenal: true,
     rotina_fechamento: true,
     telegram_ativo: false,
+    rotina_notas: true,
+    notas_limite_direto: 500,
+    notas_limite_grande: 1500,
     url_planilha: '',
     url_pasta_drive: '',
   };
@@ -1919,6 +1948,8 @@ function ferramentasAssistente() {
       input_schema: { type: 'object', properties: { valor: { type: 'number' }, categoria_id: { type: 'string' }, descricao: { type: 'string' }, estabelecimento: { type: 'string' }, forma_pgto: { type: 'string', enum: ['dinheiro', 'pix', 'débito', 'crédito', 'boleto'] }, data: { type: 'string', description: 'AAAA-MM-DD (padrão hoje)' } }, required: ['valor', 'categoria_id'] } },
     { name: 'proximas_saidas', description: 'Contas, parcelas, assinaturas e faturas previstas para os próximos 30, 60 ou 90 dias.',
       input_schema: { type: 'object', properties: { dias: { type: 'integer', enum: [30, 60, 90] } } } },
+    { name: 'buscar_nota_fiscal', description: 'Procura a nota fiscal (Nota Paraná / Nota Curitibana) de uma compra que a pessoa diz ter feito numa loja ("comprei no Condor") e lança a compra com o valor real da nota. Use quando a pessoa cita a loja sem dizer o valor. Se a nota ainda não apareceu, deixa a compra em espera na Caixa de entrada.',
+      input_schema: { type: 'object', properties: { loja: { type: 'string', description: 'nome da loja como a pessoa falou' }, data: { type: 'string', description: 'AAAA-MM-DD, se a pessoa disse quando' }, valor: { type: 'number', description: 'valor aproximado, se a pessoa disse' } }, required: ['loja'] } },
   ];
 }
 
@@ -1964,6 +1995,11 @@ function executarFerramentaAssistente(nome, entrada, ctx, estado) {
   }
   if (nome === 'proximas_saidas') {
     return { saidas: calcularProximasSaidas(d, [30, 60, 90].indexOf(Number(e.dias)) >= 0 ? Number(e.dias) : 30).map((s) => ({ data: s.data, titulo: s.titulo, valor: s.valor, status: s.status })) };
+  }
+  if (nome === 'buscar_nota_fiscal') {
+    const r = buscarNotaFiscalParaUsuario(ctx, e.loja, e.data ? normalizarDataIso(e.data) : '', lerValor(e.valor), true);
+    if (estado && r.lancamento && r.status === 'lancado') estado.lancamento = r.lancamento;
+    return { status: r.status, texto: r.texto, lancamento: r.lancamento ? { id: r.lancamento.id, valor: r.lancamento.valor, categoria_id: r.lancamento.categoria_id, data: r.lancamento.data } : undefined, notas: r.notas };
   }
   return { erro: 'Ferramenta desconhecida: ' + nome };
 }
@@ -2103,6 +2139,12 @@ function responderLocal(d, visao, uid, texto, hoje) {
   const media3 = (cid) => mediaCategoria3m(despesas, cid, comp);
   const categoriasVisiveisLocal = d.categorias.filter((c) => c.ativa && !c.oculta_cardapio && (!c.sensivel || !visao || visao.ver_sensivel !== false));
 
+  // 0. "Comprei no Condor" sem valor → procurar a nota fiscal (robô de notas, seção 8).
+  if (/^(?:EU\s+)?COMPREI\b/.test(t)) {
+    const loja = lojaDeFraseSemValor(texto);
+    if (loja) return { texto: 'Vou procurar a nota de ' + loja + '.', buscar_nota: loja };
+  }
+
   // 1. Lançamento por texto.
   if (/^(GASTEI|PAGUEI|COMPREI|LANCA|LANCE|LANCAR|REGISTRA|REGISTRE|RECEBI|GANHEI)\b/.test(t) || /\bREAIS?\b|R\$/.test(t)) {
     const e = extrairDeTexto(texto, categoriasVisiveisLocal);
@@ -2206,10 +2248,13 @@ function responderAssistente(ctx, mensagem, historico, imagem, origem) {
     const d = carregarDados();
     const r = responderLocal(d, visaoDe(ctx), ctx.uid, texto);
     let lanc;
-    if (r.lancamento) {
+    if (r.buscar_nota) {
+      const b = buscarNotaFiscalParaUsuario(ctx, r.buscar_nota, '', 0, true);
+      resposta = mensagemAssistente(b.texto, { lancamento: b.lancamento && b.status === 'lancado' ? lancamentoPublico(b.lancamento) : undefined, etiqueta: b.status === 'lancado' && b.lancamento ? 'lançado' : b.status === 'aguardando' ? 'aguardando nota' : undefined });
+    } else if (r.lancamento) {
       lanc = acaoSalvarLancamento({ lancamento: Object.assign({}, r.lancamento, { origem: origem || 'chat' }) }, ctx)[0];
     }
-    resposta = mensagemAssistente(r.texto, { barras: r.barras, lancamento: lanc, etiqueta: lanc ? 'lançado' : undefined });
+    if (!resposta) resposta = mensagemAssistente(r.texto, { barras: r.barras, lancamento: lanc, etiqueta: lanc ? 'lançado' : undefined });
   }
   gravarConversa(ctx.uid, [{ id: gerarId('m'), papel: 'eu', texto: texto || '(foto)', data: agoraIso() }, resposta]);
   return resposta;
@@ -3435,8 +3480,9 @@ function acaoVersiculoDoDia(p) {
 // ---------- Configuração ----------
 
 const CONFIG_EDITAVEIS = ['nome_familia', 'sobrenome', 'url_brasao', 'url_foto_capa', 'versiculo_lema', 'moeda', 'dia_fechamento_mes', 'lembrete_horario', 'fe_ativa',
-  'divisao_dar', 'divisao_poupar', 'divisao_viver', 'valor_gasto_grande', 'regra_votacao', 'dependente_ve_salarios', 'rotina_vigia', 'rotina_quinzenal', 'rotina_fechamento', 'telegram_ativo'];
-const CHAVES_ROTINAS = ['lembrete_horario', 'rotina_vigia', 'rotina_quinzenal', 'rotina_fechamento'];
+  'divisao_dar', 'divisao_poupar', 'divisao_viver', 'valor_gasto_grande', 'regra_votacao', 'dependente_ve_salarios', 'rotina_vigia', 'rotina_quinzenal', 'rotina_fechamento', 'telegram_ativo',
+  'rotina_notas', 'notas_limite_direto', 'notas_limite_grande'];
+const CHAVES_ROTINAS = ['lembrete_horario', 'rotina_vigia', 'rotina_quinzenal', 'rotina_fechamento', 'rotina_notas'];
 
 /** salvar_config (Administrador): só as chaves públicas; reinstala os gatilhos das rotinas quando elas mudam. */
 function acaoSalvarConfig(p, ctx) {
@@ -3891,6 +3937,7 @@ function regraDaLoja(estabelecimento, regras) {
   let melhor = null;
   (regras || []).forEach((r) => {
     const k = String(r.loja_normalizada || '');
+    if (!r.categoria_id) return; // regra só de destino (robô de notas fiscais) não sugere categoria
     if (k && (chave === k || chave.indexOf(k) >= 0) && (!melhor || k.length > melhor.loja_normalizada.length)) melhor = r;
   });
   return melhor;
@@ -4504,6 +4551,1632 @@ function extrairDadosNfce(html) {
   const forma = texto.match(/(Cart[ãa]o\s+de\s+(?:Cr[ée]dito|D[ée]bito)|Dinheiro|PIX|Pagamento\s+Instant[âa]neo)/i);
   if (forma) r.forma_pgto = extrairFormaPgto(forma[1]) || (/instant/i.test(forma[1]) ? 'pix' : undefined);
   return semUndefined(r);
+}
+
+// ==============================================================================
+// notaCuritibana.gs
+// ==============================================================================
+
+/**
+ * notaCuritibana.gs — Leitor do Nota Curitibana (NFS-e de serviços, só em Curitiba).
+ *
+ * Especificação: docs/ROBO_NOTAS_FISCAIS.md. Depende dos ajudantes de rede, cookies e credenciais de
+ * notasFiscais.gs.
+ *
+ * O que o mapeamento de 11/11/2026 mostrou: a home faz `POST /Home/CheckLogin` (token antifalsificação)
+ * e redireciona para o **e-Cidadão** da Prefeitura (`autenticacao-ecidadao.curitiba.pr.gov.br`), cuja página
+ * de login carrega o **ALTCHA** (prova de trabalho em JavaScript) e monta o formulário de CPF + senha por
+ * script (`/autenticacao/loginsenha/`). Por isso:
+ *  - `testeLoginNotaCuritibana()` (Fase 0) mapeia o caminho sem credencial e relata o desafio;
+ *  - `loginNotaCuritibana()` tenta o caminho CPF + senha quando o e-Cidadão não exigir o desafio; se exigir,
+ *    devolve `desafio` e a sincronização suspende a fonte e avisa o administrador (Plano B para esta fonte).
+ *  - Os parsers PUROS `extrairMesesCwb(html)` e `extrairNotasCwb(html|json)` já leem a tabela por mês e o
+ *    detalhe do mês (Número · Chave de Acesso (50 dígitos) · Prestador · Data · Situação · Valor · Crédito),
+ *    para o leitor ficar pronto assim que o login for resolvido.
+ */
+
+// ---------- Endereços ----------
+
+/** Nota Curitibana: o botão "Acessar" faz POST em /Home/CheckLogin e cai no e-Cidadão da Prefeitura. */
+const NOTACWB_URL_BASE = 'https://notacuritibana.curitiba.pr.gov.br';
+const NOTACWB_URL_CHECKLOGIN = NOTACWB_URL_BASE + '/Home/CheckLogin';
+const NOTACWB_URL_NFSE = NOTACWB_URL_BASE + '/Nfse';
+const ECIDADAO_HOST = 'autenticacao-ecidadao.curitiba.pr.gov.br';
+
+// ---------- Funções puras: parsers ----------
+
+/**
+ * Tabela de meses de `/Nfse` (Mês emissão · Quant. notas · Valor total · Total créditos, lupa `data-action="detalhe"`)
+ * → [{ competencia: 'aaaa-mm', quantidade, valor, credito, ref }], onde `ref` é o valor do atributo `data-*` da lupa
+ * (id/mes) usado para pedir o detalhe. Aceita "10/2026", "Outubro/2026" e "2026-10".
+ */
+function extrairMesesCwb(html) {
+  const saida = [];
+  const linhas = String(html || '').match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi) || [];
+  linhas.forEach(function (tr) {
+    const cel = (tr.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi) || []).map(limparHtml);
+    if (cel.length < 3) return;
+    const comp = competenciaDeTextoCwb(cel[0]);
+    if (!comp) return;
+    const nums = cel.slice(1).map(function (c) { return /^(?:R\$\s*)?-?\d{1,3}(?:\.\d{3})*(?:,\d{2})?$/.test(c) ? lerValor(c) : null; }).filter(function (n) { return n !== null; });
+    const lupa = tr.match(/data-action="detalhe"[^>]*/i) || tr.match(/<[^>]*data-action="detalhe"[^>]*>/i);
+    const ref = lupa ? ((lupa[0].match(/data-(?:id|mes|competencia|periodo|valor)="([^"]+)"/i) || ['', ''])[1] || (tr.match(/data-(?:id|mes|competencia|periodo)="([^"]+)"/i) || ['', ''])[1]) : '';
+    saida.push({ competencia: comp, quantidade: nums.length ? Math.round(nums[0]) : 0, valor: nums.length > 1 ? nums[1] : 0, credito: nums.length > 2 ? nums[2] : 0, ref: ref || comp });
+  });
+  return saida;
+}
+
+/** "10/2026", "Outubro/2026", "out/2026", "2026-10" → "2026-10" ('' se não for mês). */
+function competenciaDeTextoCwb(texto) {
+  const bruto = String(texto || '').trim();
+  let m = bruto.match(/^(\d{2})\/(\d{4})$/);
+  if (m) return m[2] + '-' + m[1];
+  m = bruto.match(/^(\d{4})-(\d{2})$/);
+  if (m) return m[1] + '-' + m[2];
+  const t = normalizar(texto).trim();
+  m = t.match(/^([A-Z]{3,9})[\/ -]+(\d{4})$/);
+  if (m) {
+    const idx = MESES_PT.map(function (n) { return normalizar(n); }).findIndex(function (n) { return n === m[1] || n.slice(0, 3) === m[1].slice(0, 3); });
+    if (idx >= 0) return m[2] + '-' + zeros(idx + 1, 2);
+  }
+  return '';
+}
+
+/**
+ * Detalhe do mês (tabela ou JSON do DataTables) → [{ id_portal (número), chave_acesso (50 dígitos), cnpj, emitente,
+ * data_emissao, situacao, valor, credito }]. Não há itens numa NFS-e; para serviço, isso basta.
+ */
+function extrairNotasCwb(conteudo) {
+  const texto = String(conteudo || '').trim();
+  if (texto.charAt(0) === '{' || texto.charAt(0) === '[') {
+    try { return notasCwbDeJson(JSON.parse(texto)); } catch (e) { /* cai no HTML */ }
+  }
+  const saida = [];
+  const vistas = {};
+  (texto.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi) || []).forEach(function (tr) {
+    const cel = (tr.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi) || []).map(limparHtml);
+    if (cel.length < 4) return;
+    const chave = (tr.replace(/<[^>]+>/g, ' ').match(/\b(\d{50})\b/) || (tr.match(/(?:\d{4}[ .-]?){12}\d{2}/) ? [tr.match(/(?:\d{4}[ .-]?){12}\d{2}/)[0].replace(/\D/g, '')] : null) || [''])[0];
+    const data = tr.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}:\d{2}))?/);
+    if (!data && !chave) return;
+    const numero = (cel.find(function (c) { return /^\d{1,12}$/.test(c); }) || '').trim();
+    const id = chave || numero;
+    if (!id || vistas[id]) return;
+    vistas[id] = true;
+    const valores = [];
+    cel.forEach(function (c) { const v = c.match(/^(?:R\$\s*)?(-?\d{1,3}(?:\.\d{3})*,\d{2})$/); if (v) valores.push(lerValor(v[1])); });
+    const cnpj = (tr.match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/) || [''])[0];
+    const emitente = cel.find(function (c) { return /[A-Za-z]{3}/.test(c) && !/^R\$/.test(c) && !/^\d{2}\/\d{2}\/\d{4}/.test(c) && !/^(normal|cancelad[ao]|substitu[ií]d[ao]|v[aá]lid[ao])$/i.test(c) && c !== cnpj; }) || '';
+    const situacaoTxt = cel.find(function (c) { return /^(normal|cancelad[ao]|substitu[ií]d[ao]|rejeitad[ao]|v[aá]lid[ao]|ativa)$/i.test(c); }) || '';
+    saida.push({
+      fonte: 'nota_curitibana', id_portal: numero || chave.slice(-12), tp_doc: 'nfse', chave_acesso: chave, cnpj: cnpjSoDigitos(cnpj), emitente: emitente,
+      data_emissao: data ? data[3] + '-' + data[2] + '-' + data[1] + (data[4] ? ' ' + data[4] : '') : '',
+      situacao: situacaoNota(situacaoTxt), valor: valores.length ? valores[0] : 0, credito: valores.length > 1 ? valores[1] : 0,
+    });
+  });
+  return saida;
+}
+
+/** JSON do DataTables ({ data: [...] } ou array) → mesma saída de extrairNotasCwb. */
+function notasCwbDeJson(json) {
+  const lista = Array.isArray(json) ? json : (json && (json.data || json.dados || json.notas)) || [];
+  const pegar = function (o, nomes) { for (let i = 0; i < nomes.length; i++) { const k = Object.keys(o).find(function (x) { return normalizar(x).replace(/[^A-Z]/g, '') === normalizar(nomes[i]).replace(/[^A-Z]/g, ''); }); if (k !== undefined) return o[k]; } return undefined; };
+  return lista.map(function (o) {
+    if (Array.isArray(o)) return extrairNotasCwb('<table><tr>' + o.map(function (c) { return '<td>' + c + '</td>'; }).join('') + '</tr></table>')[0];
+    const chave = String(pegar(o, ['chaveAcesso', 'chave_acesso', 'chave', 'codigoVerificacao']) || '').replace(/\D/g, '');
+    const dataTxt = String(pegar(o, ['dataEmissao', 'data_emissao', 'data']) || '');
+    const d = dataTxt.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}:\d{2}))?/) || dataTxt.match(/(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}:\d{2}))?/);
+    const iso = d ? (d[1].length === 4 ? d[1] + '-' + d[2] + '-' + d[3] : d[3] + '-' + d[2] + '-' + d[1]) + (d[4] ? ' ' + d[4] : '') : '';
+    return {
+      fonte: 'nota_curitibana', id_portal: String(pegar(o, ['numero', 'numeroNota', 'id']) || chave.slice(-12)), tp_doc: 'nfse', chave_acesso: chave.length === 50 ? chave : '',
+      cnpj: cnpjSoDigitos(pegar(o, ['cnpj', 'cnpjPrestador'])), emitente: String(pegar(o, ['razaoSocial', 'prestador', 'emitente', 'nome']) || ''),
+      data_emissao: iso, situacao: situacaoNota(String(pegar(o, ['situacao', 'status']) || '')),
+      valor: lerValor(pegar(o, ['valorNota', 'valor', 'valorServico'])), credito: lerValor(pegar(o, ['valorCredito', 'credito'])),
+    };
+  }).filter(Boolean);
+}
+
+// ---------- Rede ----------
+
+/**
+ * Chega até a página de login do e-Cidadão a partir do Nota Curitibana. Devolve { ok, pote, pagina (resposta),
+ * classe, saltos } — `classe` é 'desafio' quando a página pede ALTCHA/captcha.
+ */
+function chegarAoECidadao(pote) {
+  const home = seguirRedirecionamentos(NOTACWB_URL_BASE + '/', pote);
+  const campos = extrairCamposOcultos(home.texto);
+  const acao = extrairAcaoFormulario(home.texto, /CheckLogin/i) || '/Home/CheckLogin';
+  const corpo = Object.keys(campos).map(function (k) { return k + '=' + encodeURIComponent(campos[k]); }).join('&');
+  const post = requisicaoPortal(resolverUrl(NOTACWB_URL_BASE + '/', acao), { method: 'post', payload: corpo, headers: { Referer: NOTACWB_URL_BASE + '/', Origin: NOTACWB_URL_BASE } }, pote);
+  const saltos = home.saltos.concat([hostDeUrl(NOTACWB_URL_CHECKLOGIN) + '/Home/CheckLogin [' + post.status + ']']);
+  if (!(post.status >= 300 && post.status < 400 && post.local)) return { ok: false, pote: pote, classe: classificarRespostaPortal(post.status, post.texto, NOTACWB_URL_CHECKLOGIN), saltos: saltos, temToken: !!campos.__RequestVerificationToken };
+  const ecid = seguirRedirecionamentos(resolverUrl(NOTACWB_URL_CHECKLOGIN, post.local).replace(/^http:/, 'https:'), pote);
+  return { ok: true, pote: pote, pagina: ecid, classe: classificarRespostaPortal(ecid.status, ecid.texto, ecid.url), saltos: saltos.concat(ecid.saltos), temToken: !!campos.__RequestVerificationToken };
+}
+
+/**
+ * Login no Nota Curitibana com usuário (CPF) + senha pelo e-Cidadão. Devolve { ok, etapa, motivo, pote, saltos }.
+ * Quando a página de login exige o ALTCHA (prova de trabalho em JavaScript), devolve motivo 'desafio' — o
+ * robô não tenta resolver o desafio; a sincronização suspende a fonte e avisa o administrador.
+ */
+function loginNotaCuritibana(credencial) {
+  const pote = {};
+  const resultado = { ok: false, etapa: 'inicio', motivo: '', saltos: [], pote: pote };
+  if (!credencial || !credencial.usuario || !credencial.senha) { resultado.motivo = 'credencial ausente'; return resultado; }
+  try {
+    resultado.etapa = 'entrada';
+    const chegada = chegarAoECidadao(pote);
+    resultado.saltos = chegada.saltos;
+    if (!chegada.ok) { resultado.motivo = chegada.classe === 'ok' ? 'o Nota Curitibana não redirecionou para o e-Cidadão' : chegada.classe; return resultado; }
+    if (chegada.classe === 'desafio' || chegada.classe === 'bloqueado') { resultado.motivo = chegada.classe; return resultado; }
+    resultado.etapa = 'autenticacao';
+    const base = chegada.pagina.url;
+    const urlLogin = resolverUrl(base, '/autenticacao/loginsenha/');
+    const campos = extrairCamposOcultos(chegada.pagina.texto);
+    campos.cpf = String(credencial.usuario).replace(/\D/g, '');
+    campos.senha = String(credencial.senha);
+    const corpo = Object.keys(campos).map(function (k) { return k + '=' + encodeURIComponent(campos[k]); }).join('&');
+    const post = requisicaoPortal(urlLogin, { method: 'post', payload: corpo, headers: { Referer: base, Origin: 'https://' + ECIDADAO_HOST, 'X-Requested-With': 'XMLHttpRequest' } }, pote);
+    resultado.saltos.push(ECIDADAO_HOST + '/autenticacao/loginsenha [' + post.status + ']');
+    const classe = classificarRespostaPortal(post.status, post.texto, urlLogin);
+    if (classe === 'desafio' || classe === 'bloqueado') { resultado.motivo = classe; return resultado; }
+    if (/senha inv|usu[aá]rio ou senha|credenciais inv|cpf ou senha/i.test(post.texto)) { resultado.motivo = 'senha_invalida'; return resultado; }
+    let destino = post.local;
+    if (!destino && /^\s*\{/.test(post.texto)) { try { const j = JSON.parse(post.texto); destino = j.url || j.redirect || j.urlRetorno || ''; if (j.sucesso === false || j.success === false) { resultado.motivo = /senha/i.test(JSON.stringify(j)) ? 'senha_invalida' : 'o e-Cidadão recusou o login'; return resultado; } } catch (e) { /* segue */ } }
+    if (!destino) { resultado.motivo = 'o e-Cidadão não redirecionou após o login (' + classe + ')'; return resultado; }
+    resultado.etapa = 'retorno';
+    const volta = seguirRedirecionamentos(resolverUrl(urlLogin, destino), pote);
+    resultado.saltos = resultado.saltos.concat(volta.saltos);
+    if (hostDeUrl(volta.url) !== hostDeUrl(NOTACWB_URL_BASE)) { resultado.motivo = 'terminou fora do Nota Curitibana'; return resultado; }
+    if (!contarCookies(pote, hostDeUrl(NOTACWB_URL_BASE))) { resultado.motivo = 'sem cookie de sessão'; return resultado; }
+    resultado.ok = true;
+    resultado.motivo = 'ok';
+    return resultado;
+  } catch (e) {
+    resultado.motivo = /^conexao/.test(e.message) ? 'conexao_recusada' : 'erro: ' + textoSeguroParaLog(e.message);
+    return resultado;
+  }
+}
+
+/** Com a sessão aberta, lê os últimos `quantosMeses` meses de NFS-e. Devolve { ok, notas, meses_lidos }. */
+function lerMesesNotaCuritibana(pote, quantosMeses) {
+  const lista = requisicaoPortal(NOTACWB_URL_NFSE, { headers: { Referer: NOTACWB_URL_BASE + '/' } }, pote);
+  if (classificarRespostaPortal(lista.status, lista.texto, NOTACWB_URL_NFSE) !== 'ok') return { ok: false, notas: [], meses_lidos: 0 };
+  const meses = extrairMesesCwb(lista.texto).sort(function (a, b) { return a.competencia < b.competencia ? 1 : -1; }).slice(0, quantosMeses || 2);
+  const notas = [];
+  let lidos = 0;
+  meses.forEach(function (m, i) {
+    if (i > 0) pausaEntreRequisicoes();
+    const url = NOTACWB_URL_NFSE + '/Detalhe?mes=' + encodeURIComponent(m.ref);
+    const r = requisicaoPortal(url, { headers: { Referer: NOTACWB_URL_NFSE, 'X-Requested-With': 'XMLHttpRequest' } }, pote);
+    if (classificarRespostaPortal(r.status, r.texto, url) !== 'ok') return;
+    lidos++;
+    extrairNotasCwb(r.texto).forEach(function (n) { notas.push(n); });
+  });
+  return { ok: true, notas: notas, meses_lidos: lidos };
+}
+
+/** Leitor completo usado pela sincronização: login + últimos 2 meses. Mesmo formato de lerNotaParana. */
+function lerNotaCuritibana(credencial, quantosMeses) {
+  const login = loginNotaCuritibana(credencial);
+  if (!login.ok) return { ok: false, motivo: login.motivo, etapa: login.etapa, notas: [], meses_lidos: 0 };
+  const r = lerMesesNotaCuritibana(login.pote, quantosMeses || 2);
+  return { ok: r.ok, motivo: r.ok ? 'ok' : 'não consegui ler a lista de meses', pote: login.pote, notas: r.notas, meses_lidos: r.meses_lidos };
+}
+
+// ---------- Fase 0: mapeamento ----------
+
+/**
+ * FASE 0 — Nota Curitibana. Mapeia o caminho de login SEM credencial: GET na home → POST /Home/CheckLogin
+ * (com o token antifalsificação) → redireciona para o e-Cidadão da Prefeitura. Relata até onde dá para
+ * chegar do IP do Google e se a página final pede captcha/desafio (no mapeamento de 11/11/2026 o
+ * e-Cidadão carregava o ALTCHA, uma prova de trabalho em JavaScript).
+ */
+function testeLoginNotaCuritibana() {
+  const pote = {};
+  const linhas = ['Nota Curitibana — mapeamento do login (sem credencial)'];
+  try {
+    const chegada = chegarAoECidadao(pote);
+    if (!chegada.temToken) linhas.push('não achei o token antifalsificação do formulário "Acessar" (o HTML mudou?)');
+    const checklogin = chegada.saltos.find(function (s) { return /CheckLogin/.test(s); }) || '';
+    linhas.push('CheckLogin: HTTP ' + (checklogin.match(/\[(\d+)\]/) || ['', '?'])[1] + (chegada.ok ? ' → ' + hostDeUrl(chegada.pagina.url) : ''));
+    if (chegada.ok) {
+      const ecid = chegada.pagina;
+      linhas.push('e-Cidadão: HTTP ' + ecid.status + ' · ' + chegada.classe + ' · ' + chegada.saltos.join(' → '));
+      linhas.push(/altcha/i.test(ecid.texto) ? 'desafio ALTCHA (prova de trabalho) presente na página de login' : 'nenhum captcha/desafio detectado no HTML');
+      linhas.push(/\/autenticacao\/loginsenha/i.test(ecid.texto) ? 'login por CPF + senha disponível (/autenticacao/loginsenha)' : 'formulário de CPF + senha é montado por JavaScript (não aparece no HTML)');
+    } else {
+      linhas.push('o Nota Curitibana não redirecionou para o e-Cidadão (' + chegada.classe + ') · ' + chegada.saltos.join(' → '));
+    }
+  } catch (e) {
+    linhas.push('FALHOU: ' + (/^conexao/.test(e.message) ? 'conexao_recusada' : textoSeguroParaLog(e.message)));
+  }
+  const texto = linhas.join('\n');
+  Logger.log(texto);
+  return texto;
+}
+
+// ==============================================================================
+// notaParana.gs
+// ==============================================================================
+
+/**
+ * notaParana.gs — Leitor do Nota Paraná (NFC-e e NF-e com CPF na nota, qualquer cidade do PR).
+ *
+ * Especificação: docs/ROBO_NOTAS_FISCAIS.md (seções 1, 2 e 10). Depende dos ajudantes de rede,
+ * cookies e credenciais de notasFiscais.gs.
+ *
+ *  - Fase 0: `testeLoginNotaParana()` — prova de conceito do login pelo UrlFetchApp (imprime só
+ *    "login ok · N notas em MM/AAAA" ou o motivo da falha).
+ *  - Fase 1: `loginNotaParana()`, `listarMesNotaParana()`, `lerDanfeNotaParana()` e os parsers PUROS
+ *    `extrairListaNotasPr(html)` e `extrairDanfePr(html)`, testados em testes/executar.mjs com as
+ *    amostras anonimizadas de testes/amostras/.
+ *
+ * Regra de ouro: CPF, senha, cookies, tokens e códigos do OAuth NUNCA vão para log, planilha, Git ou
+ * mensagem. Os cookies vivem apenas na memória desta execução.
+ */
+
+// ---------- Endereços ----------
+
+/** Aplicação do Nota Paraná (a lista e o DANFE ficam aqui, atrás do login). */
+const NOTAPR_URL_BASE = 'https://notaparana.pr.gov.br';
+const NOTAPR_URL_ENTRADA = NOTAPR_URL_BASE + '/nfprweb/Extrato';
+const NOTAPR_URL_LISTA = NOTAPR_URL_BASE + '/nfprweb/NotasFiscaisAjax';
+const NOTAPR_URL_DANFE = NOTAPR_URL_BASE + '/nfprweb/NotaFiscalHtml';
+/** Identidade Digital Sefa/PR (OAuth authorization code + PKCE; o formulário é authentication.jsp). */
+const SEFA_AUTHZ_HOST = 'authz-sefa.identidadedigital.pr.gov.br';
+
+// ---------- Funções puras: formulário da Sefa ----------
+
+/**
+ * Parâmetros da query string, **sem decodificar** (é assim que authentication.jsp copia cada par
+ * `chave=valor` para os campos ocultos do formulário, e o navegador codifica de novo ao enviar).
+ */
+function lerQueryString(url) {
+  const q = String(url || '').split('#')[0].split('?')[1] || '';
+  const saida = {};
+  q.split('&').forEach(function (par) {
+    if (!par) return;
+    const i = par.indexOf('=');
+    const chave = i < 0 ? par : par.slice(0, i);
+    const valor = i < 0 ? '' : par.slice(i + 1);
+    if (chave) saida[chave] = valor;
+  });
+  return saida;
+}
+
+/** Campos que o formulário da Sefa envia em `POST api/v1/authorize`: step=2 + todos os parâmetros da URL. */
+function camposDoFormularioSefa(urlAuthentication) {
+  const campos = lerQueryString(urlAuthentication);
+  campos.step = '2';
+  return campos;
+}
+
+/** É a página de login da Identidade Digital Sefa? (pela URL ou pelo HTML) */
+function ehPaginaLoginSefa(url, html) {
+  return /authentication\.jsp/i.test(String(url || '')) || /id="authForm"/i.test(String(html || ''));
+}
+
+/** Período como o portal espera: `01/MM/AAAA`. */
+function periodoNotaPr(ano, mes) {
+  return '01/' + zeros(mes, 2) + '/' + ano;
+}
+
+// ---------- Funções puras: lista do mês ----------
+
+/**
+ * Ids das notas (`idDocFiscal`) na lista do mês do Nota Paraná (`NotasFiscaisAjax`), sem repetição.
+ * Também aceita um JSON com objetos que tenham `idDocFiscal`, caso o portal passe a devolver JSON.
+ */
+function extrairIdsNotasPr(html) {
+  const texto = String(html || '');
+  const vistos = {};
+  const ids = [];
+  const re = /idDocFiscal["']?\s*[=:]\s*["']?(\d+)/gi;
+  let m;
+  while ((m = re.exec(texto))) {
+    if (!vistos[m[1]]) { vistos[m[1]] = true; ids.push(m[1]); }
+  }
+  return ids;
+}
+
+/** Quantas notas há na lista do mês (prova de conceito: só a contagem). */
+function contarNotasPr(html) {
+  return extrairIdsNotasPr(html).length;
+}
+
+/**
+ * Lista do mês → [{ id_portal, tp_doc, cnpj, emitente, numero, data_emissao, valor, credito, situacao }].
+ * Colunas vistas no portal: CNPJ · Estabelecimento · Nota (link) · Data de emissão · Valor · Crédito · Situação.
+ * Tolerante: localiza CNPJ, data e valores pelo formato, e o link pelo `idDocFiscal`. Uma nota repetida
+ * (duas linhas com o mesmo id) entra uma vez só.
+ */
+function extrairListaNotasPr(html) {
+  const texto = String(html || '');
+  const saida = [];
+  const vistos = {};
+  const linhas = texto.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi) || [];
+  linhas.forEach(function (tr) {
+    const link = tr.match(/tpDoc=(\d)[^"'>]*?idDocFiscal=(\d+)|idDocFiscal=(\d+)[^"'>]*?tpDoc=(\d)/i);
+    if (!link) return;
+    const id = link[2] || link[3];
+    const tp = link[1] || link[4];
+    if (!id || vistos[id]) return;
+    vistos[id] = true;
+    const celulas = (tr.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi) || []).map(function (td) { return limparHtml(td); });
+    const cnpj = (tr.match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/) || [''])[0];
+    const data = (tr.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}:\d{2})(?::\d{2})?)?/) || null);
+    const valores = [];
+    celulas.forEach(function (c) { const v = c.match(/^(?:R\$\s*)?(-?\d{1,3}(?:\.\d{3})*,\d{2})$/); if (v) valores.push(lerValor(v[1])); });
+    const numero = limparHtml((tr.match(/idDocFiscal=\d+[^>]*>([\s\S]*?)<\/a>/i) || ['', ''])[1]).replace(/\D/g, '');
+    const idxCnpj = celulas.findIndex(function (c) { return c === cnpj; });
+    const emitente = idxCnpj >= 0 && celulas[idxCnpj + 1] ? celulas[idxCnpj + 1] : (celulas.find(function (c) { return /[A-Za-z]{3}/.test(c) && !/^R\$/.test(c) && c !== cnpj && !/^\d{2}\/\d{2}\/\d{4}/.test(c); }) || '');
+    const ultima = celulas.length ? celulas[celulas.length - 1] : '';
+    saida.push({
+      id_portal: id, tp_doc: tp === '1' ? '1' : '2', cnpj: cnpjSoDigitos(cnpj), emitente: emitente, numero: numero,
+      data_emissao: data ? data[3] + '-' + data[2] + '-' + data[1] + (data[4] ? ' ' + data[4] : '') : '',
+      valor: valores.length ? valores[0] : 0, credito: valores.length > 1 ? valores[1] : 0,
+      situacao: situacaoNota(ultima),
+    });
+  });
+  return saida;
+}
+
+/** "Normal", "Cancelada", "Rejeitada", "Denegada"… → normal · cancelada · rejeitada. */
+function situacaoNota(texto) {
+  const t = normalizar(texto);
+  if (/CANCEL/.test(t)) return 'cancelada';
+  if (/REJEIT|DENEG|INUTIL/.test(t)) return 'rejeitada';
+  return 'normal';
+}
+
+/** Só os 14 dígitos do CNPJ (ou '' se não houver). */
+function cnpjSoDigitos(texto) {
+  const d = String(texto || '').replace(/\D/g, '');
+  return d.length === 14 ? d : '';
+}
+
+/** Tira tags, entidades e espaços repetidos de um trecho de HTML. */
+function limparHtml(trecho) {
+  return String(trecho || '')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#0?39;/g, "'")
+    .replace(/&#(\d+);/g, function (m, n) { return String.fromCharCode(Number(n)); })
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// ---------- Funções puras: DANFE (detalhe da nota) ----------
+
+/**
+ * DANFE em HTML (`NotaFiscalHtml?tpDoc=…&idDocFiscal=…`) → {
+ *   chave_acesso (44 dígitos), cnpj, emitente, data_emissao ("aaaa-mm-dd hh:mm"), valor, frete, desconto,
+ *   forma_pgto, itens: [{ d, c, q, un, vu, vt }], protocolo, qtd_itens }.
+ *
+ * Reconhece o leiaute padrão da consulta pública de NFC-e (spans `txtTit`, `RCod`, `Rqtd`, `RUN`, `RvlUnit`,
+ * `valor`; rótulos "Valor total R$", "Desconto R$", "Valor a pagar R$", "Forma de pagamento") e, como reserva,
+ * uma tabela genérica de itens (descrição · código · qtde · un · vl. unit · vl. total).
+ */
+function extrairDanfePr(html) {
+  const h = String(html || '');
+  const txt = limparHtml(h);
+  const saida = { chave_acesso: '', cnpj: '', emitente: '', data_emissao: '', valor: 0, frete: 0, desconto: 0, forma_pgto: '', itens: [], protocolo: '', qtd_itens: 0 };
+  // Chave de acesso: 44 dígitos, podendo vir em grupos de 4 separados por espaço.
+  const chave = h.match(/(?:\d{4}\s*){11}/);
+  if (chave) saida.chave_acesso = chave[0].replace(/\D/g, '').slice(0, 44);
+  // Emitente: primeiro bloco `txtTopo`, ou o texto antes de "CNPJ:".
+  const topo = h.match(/class="txtTopo"[^>]*>([\s\S]*?)<\/div>/i);
+  if (topo) saida.emitente = limparHtml(topo[1]);
+  const cnpj = txt.match(/CNPJ:?\s*(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})/i);
+  if (cnpj) saida.cnpj = cnpjSoDigitos(cnpj[1]);
+  if (!saida.emitente) {
+    const antes = txt.match(/([A-ZÀ-Ü][A-ZÀ-Ü0-9 .&'-]{4,80})\s+CNPJ:/);
+    if (antes) saida.emitente = antes[1].trim();
+  }
+  // Emissão: "Emissão: 03/11/2026 18:42:10".
+  const emissao = txt.match(/Emiss[aã]o:?\s*(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}:\d{2}))?/i) || txt.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2})/);
+  if (emissao) saida.data_emissao = emissao[3] + '-' + emissao[2] + '-' + emissao[1] + (emissao[4] ? ' ' + emissao[4] : '');
+  // Totais.
+  const total = txt.match(/Valor total R\$:?\s*(-?[\d.]+,\d{2})/i);
+  const pagar = txt.match(/Valor a pagar R\$:?\s*(-?[\d.]+,\d{2})/i);
+  const desconto = txt.match(/Descontos? R\$:?\s*(-?[\d.]+,\d{2})/i);
+  const frete = txt.match(/Frete R\$:?\s*(-?[\d.]+,\d{2})/i);
+  const qtd = txt.match(/Qtd\.? total de itens:?\s*(\d+)/i);
+  saida.valor = lerValor(pagar ? pagar[1] : total ? total[1] : 0);
+  saida.desconto = lerValor(desconto ? desconto[1] : 0);
+  saida.frete = lerValor(frete ? frete[1] : 0);
+  saida.qtd_itens = qtd ? Number(qtd[1]) : 0;
+  const forma = txt.match(/Forma de pagamento:?\s*([A-Za-zÀ-ü ]+?)(?=\s+(?:Valor pago|Troco|Informa|Consulte|Chave|$))/i);
+  if (forma) saida.forma_pgto = forma[1].trim();
+  const protocolo = txt.match(/Protocolo de autoriza[cç][aã]o:?\s*(\d{10,20})/i);
+  if (protocolo) saida.protocolo = protocolo[1];
+  // Itens — leiaute de spans.
+  const blocos = h.match(/<span class="txtTit">[\s\S]*?class="valor">[\s\S]*?<\/span>/gi) || [];
+  blocos.forEach(function (b) {
+    const d = limparHtml((b.match(/class="txtTit">([\s\S]*?)<\/span>/i) || ['', ''])[1]);
+    const c = limparHtml((b.match(/class="RCod">([\s\S]*?)<\/span>/i) || ['', ''])[1]).replace(/.*?(\d+)\D*$/, '$1');
+    const q = lerValor(limparHtml((b.match(/class="Rqtd">([\s\S]*?)<\/span>/i) || ['', ''])[1]).replace(/.*?:/, ''));
+    const un = limparHtml((b.match(/class="RUN">([\s\S]*?)<\/span>/i) || ['', ''])[1]).replace(/.*?:/, '').trim();
+    const vu = lerValor(limparHtml((b.match(/class="RvlUnit">([\s\S]*?)<\/span>/i) || ['', ''])[1]).replace(/.*?:/, ''));
+    const vt = lerValor(limparHtml((b.match(/class="valor">([\s\S]*?)<\/span>/i) || ['', ''])[1]));
+    if (d) saida.itens.push(itemNota(d, c, q, un, vu, vt));
+  });
+  // Itens — tabela genérica (reserva): linhas com descrição + 3 números + unidade.
+  if (!saida.itens.length) {
+    const linhas = h.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi) || [];
+    linhas.forEach(function (tr) {
+      const cel = (tr.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi) || []).map(limparHtml);
+      if (cel.length < 5) return;
+      const nums = cel.map(function (c) { return /^-?\d{1,3}(?:\.\d{3})*(?:,\d{1,4})?$/.test(c) ? lerValor(c) : null; });
+      const idxNum = nums.map(function (n, i) { return n === null ? -1 : i; }).filter(function (i) { return i >= 0; });
+      if (idxNum.length < 3 || !/[A-Za-z]{3}/.test(cel[0])) return;
+      const un = cel.find(function (c) { return /^[A-Z]{1,3}$/i.test(c); }) || '';
+      const codigo = cel.find(function (c, i) { return i > 0 && /^\d{3,14}$/.test(c); }) || '';
+      saida.itens.push(itemNota(cel[0], codigo, nums[idxNum[idxNum.length - 3]], un, nums[idxNum[idxNum.length - 2]], nums[idxNum[idxNum.length - 1]]));
+    });
+  }
+  if (!saida.valor && saida.itens.length) saida.valor = arredondar(somar(saida.itens, function (i) { return i.vt; }));
+  if (!saida.qtd_itens) saida.qtd_itens = saida.itens.length;
+  return saida;
+}
+
+/** Item compacto para a coluna `itens` (JSON curto): d=descrição, c=código, q=qtde, un, vu=unitário, vt=total. */
+function itemNota(d, c, q, un, vu, vt) {
+  return semUndefined({ d: String(d || '').slice(0, 60), c: c || undefined, q: q || 0, un: un || undefined, vu: vu || 0, vt: vt || 0 });
+}
+
+/** "Cartão de Crédito" → crédito · "Cartão de Débito" → débito · "Dinheiro" → dinheiro · "PIX" → pix (função pura). */
+function formaPgtoDaNota(texto) {
+  const t = normalizar(texto);
+  if (/CREDITO/.test(t)) return 'crédito';
+  if (/DEBITO/.test(t)) return 'débito';
+  if (/DINHEIRO/.test(t)) return 'dinheiro';
+  if (/PIX|INSTANT/.test(t)) return 'pix';
+  if (/BOLETO/.test(t)) return 'boleto';
+  return 'débito';
+}
+
+// ---------- Rede: login, lista e detalhe ----------
+
+/**
+ * Faz o login no Nota Paraná pela Identidade Digital Sefa/PR, só com UrlFetchApp.
+ * Devolve { ok, etapa, motivo, status, saltos, pote }. Nada do retorno além de ok/etapa/motivo/status/saltos
+ * pode ir para log.
+ *
+ * Caminho: GET /nfprweb/Extrato → 302s até authentication.jsp?response_type=code&client_id=…&code_challenge=…
+ *          → POST api/v1/authorize (campos da URL + step=2 + attribute=CPF + password)
+ *          → 302 redirect_uri?code=…&state=… → 302s no notaparana.pr.gov.br até a página logada.
+ */
+function loginNotaParana(credencial) {
+  const pote = {};
+  const resultado = { ok: false, etapa: 'inicio', motivo: '', status: 0, saltos: [], pote: pote };
+  if (!credencial || !credencial.cpf || !credencial.senha) { resultado.motivo = 'credencial ausente'; return resultado; }
+  let r;
+  try {
+    resultado.etapa = 'entrada';
+    r = seguirRedirecionamentos(NOTAPR_URL_ENTRADA, pote);
+    resultado.saltos = r.saltos.slice();
+    resultado.status = r.status;
+    let classe = classificarRespostaPortal(r.status, r.texto, r.url);
+    if (classe === 'bloqueado' || classe === 'desafio') { resultado.motivo = classe; return resultado; }
+    if (!ehPaginaLoginSefa(r.url, r.texto)) { resultado.motivo = 'não chegou ao formulário da Sefa (' + classe + ')'; return resultado; }
+
+    resultado.etapa = 'autenticacao';
+    const campos = camposDoFormularioSefa(r.url);
+    campos.attribute = String(credencial.cpf).replace(/\D/g, '');
+    campos.password = String(credencial.senha);
+    const urlPost = resolverUrl(r.url, extrairAcaoFormulario(r.texto, /id="authForm"/i) || 'api/v1/authorize');
+    const corpo = Object.keys(campos).map(function (k) { return k + '=' + encodeURIComponent(campos[k]); }).join('&');
+    const post = requisicaoPortal(urlPost, { method: 'post', payload: corpo, headers: { Referer: r.url, Origin: 'https://' + SEFA_AUTHZ_HOST } }, pote);
+    resultado.status = post.status;
+    resultado.saltos.push(hostDeUrl(urlPost) + '/…/authorize [' + post.status + ']');
+    classe = classificarRespostaPortal(post.status, post.texto, post.local || urlPost);
+    if (classe === 'bloqueado' || classe === 'desafio' || classe === 'senha_invalida') { resultado.motivo = classe; return resultado; }
+    if (!(post.status >= 300 && post.status < 400 && post.local)) { resultado.motivo = 'a Sefa não redirecionou após o POST (' + classe + ')'; return resultado; }
+    if (ehPaginaLoginSefa(post.local, '')) { resultado.motivo = classificarRespostaPortal(200, '', post.local) === 'senha_invalida' ? 'senha_invalida' : 'voltou ao formulário'; return resultado; }
+
+    resultado.etapa = 'retorno';
+    const volta = seguirRedirecionamentos(resolverUrl(urlPost, post.local), pote);
+    resultado.saltos = resultado.saltos.concat(volta.saltos);
+    resultado.status = volta.status;
+    classe = classificarRespostaPortal(volta.status, volta.texto, volta.url);
+    if (classe !== 'ok') { resultado.motivo = 'retorno do OAuth terminou em ' + classe; return resultado; }
+    if (ehPaginaLoginSefa(volta.url, volta.texto)) { resultado.motivo = 'voltou ao formulário'; return resultado; }
+    if (hostDeUrl(volta.url) !== hostDeUrl(NOTAPR_URL_BASE)) { resultado.motivo = 'terminou fora do Nota Paraná'; return resultado; }
+    if (!contarCookies(pote, hostDeUrl(NOTAPR_URL_BASE))) { resultado.motivo = 'sem cookie de sessão'; return resultado; }
+    resultado.ok = true;
+    resultado.motivo = 'ok';
+    return resultado;
+  } catch (e) {
+    resultado.motivo = /^conexao/.test(e.message) ? 'conexao_recusada' : 'erro: ' + textoSeguroParaLog(e.message);
+    return resultado;
+  }
+}
+
+/** Com a sessão aberta, baixa a lista do mês (`NotasFiscaisAjax`). Devolve { status, classe, html, notas, quantidade, tamanho }. */
+function listarMesNotaParana(pote, ano, mes, incluirCanceladas) {
+  const url = NOTAPR_URL_LISTA + '?periodo=' + encodeURIComponent(periodoNotaPr(ano, mes)) + '&situacao=' + (incluirCanceladas ? '0' : '1');
+  const r = requisicaoPortal(url, { headers: { 'X-Requested-With': 'XMLHttpRequest', Referer: NOTAPR_URL_ENTRADA } }, pote);
+  const classe = classificarRespostaPortal(r.status, r.texto, url);
+  const notas = classe === 'ok' ? extrairListaNotasPr(r.texto) : [];
+  return { status: r.status, classe: classe, html: r.texto, notas: notas, quantidade: classe === 'ok' ? contarNotasPr(r.texto) : 0, tamanho: r.texto.length };
+}
+
+/** Compatibilidade com a Fase 0: só a contagem do mês. */
+function listarNotasMesNotaParana(pote, ano, mes) {
+  const r = listarMesNotaParana(pote, ano, mes);
+  return { status: r.status, quantidade: r.quantidade, classe: r.classe, tamanho: r.tamanho };
+}
+
+/** Com a sessão aberta, baixa o DANFE de uma nota e devolve o resultado de extrairDanfePr (ou null se falhar). */
+function lerDanfeNotaParana(pote, tpDoc, idPortal) {
+  const url = NOTAPR_URL_DANFE + '?tpDoc=' + encodeURIComponent(tpDoc) + '&idDocFiscal=' + encodeURIComponent(idPortal);
+  const r = requisicaoPortal(url, { headers: { Referer: NOTAPR_URL_ENTRADA } }, pote);
+  if (classificarRespostaPortal(r.status, r.texto, url) !== 'ok') return null;
+  return extrairDanfePr(r.texto);
+}
+
+/**
+ * Leitor completo usado pela sincronização: login + lista dos meses pedidos. Devolve
+ * { ok, motivo, pote, notas: [...lista normalizada], meses_lidos }. Os detalhes (DANFE) são buscados
+ * depois, só para as notas novas (limite por execução em notasFiscais.gs).
+ */
+function lerNotaParana(credencial, meses) {
+  const login = loginNotaParana(credencial);
+  if (!login.ok) return { ok: false, motivo: login.motivo, etapa: login.etapa, notas: [], meses_lidos: 0 };
+  const notas = [];
+  let mesesLidos = 0;
+  (meses || []).forEach(function (m, i) {
+    if (i > 0) pausaEntreRequisicoes();
+    const r = listarMesNotaParana(login.pote, m.ano, m.mes, true);
+    if (r.classe !== 'ok') return;
+    mesesLidos++;
+    r.notas.forEach(function (n) { notas.push(Object.assign({ fonte: 'nota_parana' }, n)); });
+  });
+  return { ok: true, motivo: 'ok', pote: login.pote, notas: notas, meses_lidos: mesesLidos };
+}
+
+// ---------- Fase 0: prova de conceito ----------
+
+/**
+ * FASE 0 — Prova de conceito do Nota Paraná. Rode no editor do Apps Script e veja o Registro de execução.
+ * Antes, crie a propriedade do script `NOTAPR_<usuario_id>` com `{"cpf":"...","senha":"..."}`
+ * (Configurações do projeto → Propriedades do script) — ou conecte pelo app em Configurações → Notas fiscais.
+ * Sem argumento, usa a primeira credencial encontrada.
+ * Imprime SÓ "login ok · N notas em MM/AAAA" ou o motivo da falha. Nada sensível.
+ */
+function testeLoginNotaParana(usuarioId) {
+  const uid = usuarioId || listarUsuariosComCredencial(PREFIXO_CRED_NOTAPR)[0];
+  if (!uid) { const m = 'Nenhuma credencial: crie a propriedade do script NOTAPR_<usuario_id> = {"cpf":"…","senha":"…"}'; Logger.log(m); return m; }
+  const cred = lerCredencialFiscal(PREFIXO_CRED_NOTAPR, uid);
+  if (!cred) { const m = 'Propriedade NOTAPR_' + uid + ' não é um JSON válido com cpf e senha'; Logger.log(m); return m; }
+  const inicio = Date.now();
+  const login = loginNotaParana(cred);
+  const linhas = ['Nota Paraná — prova de conceito (usuário ' + uid + ')', 'caminho: ' + login.saltos.join(' → ')];
+  if (!login.ok) {
+    linhas.push('FALHOU na etapa "' + login.etapa + '": ' + login.motivo + (login.status ? ' (HTTP ' + login.status + ')' : ''));
+    linhas.push(dicaFase0(login.motivo));
+  } else {
+    const hoje = new Date();
+    const lista = listarNotasMesNotaParana(login.pote, hoje.getFullYear(), hoje.getMonth() + 1);
+    if (lista.classe !== 'ok') linhas.push('login ok, mas a lista do mês voltou "' + lista.classe + '" (HTTP ' + lista.status + ', ' + lista.tamanho + ' bytes)');
+    else linhas.push('login ok · ' + lista.quantidade + ' notas em ' + zeros(hoje.getMonth() + 1, 2) + '/' + hoje.getFullYear());
+  }
+  linhas.push('tempo: ' + Math.round((Date.now() - inicio) / 100) / 10 + ' s');
+  const texto = linhas.join('\n');
+  Logger.log(texto);
+  return texto;
+}
+
+/** Tradução do motivo em próximo passo (texto fixo, sem dados). */
+function dicaFase0(motivo) {
+  if (motivo === 'conexao_recusada' || motivo === 'bloqueado') return '→ O portal não aceita conexões do IP do Google: seguir pelo Plano B (coletor externo + ?webhook=notas) ou rodar o robô de um computador no Brasil.';
+  if (motivo === 'desafio') return '→ O portal pede captcha/desafio: Plano B, ou aguardar; o QR Code da NFC-e continua funcionando.';
+  if (motivo === 'senha_invalida') return '→ Confira CPF e senha (o robô não tenta de novo para não bloquear a conta).';
+  return '→ Guarde esta saída (ela não tem dados pessoais) e mande para ajustar o robô.';
+}
+
+// ==============================================================================
+// notasFiscais.gs
+// ==============================================================================
+
+/**
+ * notasFiscais.gs — Robô de Notas Fiscais: parte comum aos portais, sincronização, conciliação e API.
+ *
+ * Especificação: docs/ROBO_NOTAS_FISCAIS.md. Os leitores de cada portal ficam em notaParana.gs e
+ * notaCuritibana.gs; aqui ficam:
+ *  - ajudantes PUROS de rede (URL, HTML, cookies, classificação da resposta) usados pelos dois leitores;
+ *  - credenciais (só nas Propriedades do script: NOTAPR_<uid> / NOTACWB_<uid>, gravadas e nunca devolvidas);
+ *  - a aba NotasFiscais (uma linha por nota; chave_acesso é a chave única);
+ *  - conciliação (seção 5): já existe pela chave? pelo jeito antigo (compraJaExiste)? senão Caixa de Entrada
+ *    ou lançamento direto quando a loja já é conhecida;
+ *  - regra Família × Empresa (seção 6) e aprendizado por CNPJ (RegrasLoja.destino / cnpj);
+ *  - sincronizarNotasFiscais() (seção 7): gatilho a cada 6 h + 21h, janela de 2 meses, no máximo 40 detalhes
+ *    por execução, pausa entre requisições, suspensão após 2 falhas de login, resumo por Telegram/e-mail;
+ *  - buscar_nota_fiscal (seção 8) para o Assistente e a voz, com a espera `aguardando_nota` na Caixa;
+ *  - ações da API (seção 9) e o webhook `?webhook=notas` do Plano B.
+ *
+ * Regra de ouro: CPF, senha, cookies, tokens e códigos NUNCA vão para log, planilha, Git ou mensagem.
+ */
+
+// ---------- Constantes ----------
+
+/** Prefixos das credenciais nas Propriedades do script (uma por membro adulto). */
+const PREFIXO_CRED_NOTAPR = 'NOTAPR_';
+const PREFIXO_CRED_NOTACWB = 'NOTACWB_';
+/** Fontes conhecidas e o prefixo da credencial de cada uma. */
+const FONTES_NOTAS = { nota_parana: { prefixo: PREFIXO_CRED_NOTAPR, nome: 'Nota Paraná' }, nota_curitibana: { prefixo: PREFIXO_CRED_NOTACWB, nome: 'Nota Curitibana' } };
+/** Máximo de saltos (redirecionamentos) seguidos numa sequência. */
+const NOTAS_MAX_SALTOS = 12;
+/** Máximo de detalhes (DANFE) baixados por execução (limite de 6 min do Apps Script). */
+const NOTAS_MAX_DETALHES_POR_EXECUCAO = 40;
+/** Tempo máximo de uma passada antes de parar e deixar o resto para a próxima (ms). */
+const NOTAS_TEMPO_MAXIMO_MS = 4.5 * 60 * 1000;
+/** Falhas de login seguidas que suspendem a fonte daquele membro (para não bloquear a conta). */
+const NOTAS_MAX_FALHAS_LOGIN = 2;
+/** Chaves na Config por fonte/usuário (estado do robô, sem segredos). */
+const NOTAS_CHAVE_ESTADO = 'notas_estado_';
+/** Destinos possíveis de uma nota. */
+const DESTINOS_NOTA = ['familia', 'empresa', 'ignorar', 'a_confirmar'];
+
+// ---------- Funções puras: URL ----------
+
+/** "https://a.b/c?d" → "a.b" (minúsculo, sem porta). */
+function hostDeUrl(url) {
+  const m = String(url || '').match(/^[a-z]+:\/\/([^/?#:]+)/i);
+  return m ? m[1].toLowerCase() : '';
+}
+
+/** Resolve um endereço relativo (`api/v1/authorize`, `/Home/Index`, `//cdn/x`) contra a página atual. */
+function resolverUrl(base, relativa) {
+  const r = String(relativa || '').trim();
+  if (!r) return String(base || '');
+  if (/^[a-z]+:\/\//i.test(r)) return r;
+  const m = String(base || '').match(/^([a-z]+:)\/\/([^/?#]+)(\/[^?#]*)?/i);
+  if (!m) return r;
+  const esquema = m[1], host = m[2], caminho = m[3] || '/';
+  if (r.indexOf('//') === 0) return esquema + r;
+  if (r.charAt(0) === '/') return esquema + '//' + host + r;
+  if (r.charAt(0) === '?') return esquema + '//' + host + caminho + r;
+  const pasta = caminho.slice(0, caminho.lastIndexOf('/') + 1);
+  return esquema + '//' + host + pasta + r;
+}
+
+// ---------- Funções puras: HTML ----------
+
+/** `<input type="hidden" name="x" value="y">` → { x: 'y' } (serve para o token antifalsificação do Nota Curitibana). */
+function extrairCamposOcultos(html) {
+  const saida = {};
+  const re = /<input\b[^>]*>/gi;
+  let m;
+  while ((m = re.exec(String(html || '')))) {
+    const tag = m[0];
+    if (!/type\s*=\s*["']?hidden/i.test(tag)) continue;
+    const nome = tag.match(/\bname\s*=\s*["']([^"']+)["']/i);
+    const valor = tag.match(/\bvalue\s*=\s*["']([^"']*)["']/i);
+    if (nome) saida[nome[1]] = valor ? valor[1] : '';
+  }
+  return saida;
+}
+
+/** `action` do primeiro `<form>` cujo HTML casa com o filtro (ou do primeiro formulário). */
+function extrairAcaoFormulario(html, filtro) {
+  const re = /<form\b[^>]*>/gi;
+  let m;
+  while ((m = re.exec(String(html || '')))) {
+    if (filtro && !filtro.test(m[0])) continue;
+    const a = m[0].match(/\baction\s*=\s*["']([^"']*)["']/i);
+    return a ? a[1] : '';
+  }
+  return '';
+}
+
+/**
+ * Classifica uma resposta HTTP do portal (sem guardar nada dela):
+ *  - `bloqueado`: 403/429/5xx ou página de WAF (o IP do Google foi barrado → Plano B);
+ *  - `desafio`: captcha ou prova de trabalho (reCAPTCHA, hCaptcha, Turnstile, ALTCHA);
+ *  - `senha_invalida`: a Sefa voltou ao formulário com mensagem de usuário/senha;
+ *  - `formulario_login`: ainda estamos no formulário (login não aconteceu);
+ *  - `ok`: página comum (2xx);
+ *  - `redirecionamento`: 3xx;
+ *  - `desconhecido`: o resto.
+ */
+function classificarRespostaPortal(status, html, url) {
+  const h = String(html || '');
+  const u = String(url || '');
+  if (/recaptcha|hcaptcha|turnstile|altcha|captcha/i.test(h)) return 'desafio';
+  if (status === 403 || status === 429 || status >= 500) return 'bloqueado';
+  if (/access denied|request blocked|incapsula|cloudflare.*(challenge|attention)/i.test(h)) return 'bloqueado';
+  if (ehPaginaLoginSefa(u, h)) {
+    const q = lerQueryString(u);
+    const msg = decodeURIComponent(String(q.mensagem || '').replace(/\+/g, ' ')).toLowerCase();
+    if (/senha|inv[aá]lid|incorret|bloquead/.test(msg)) return 'senha_invalida';
+    if (/senha inv|usu[aá]rio ou senha|credenciais inv/i.test(h)) return 'senha_invalida';
+    return 'formulario_login';
+  }
+  if (status >= 300 && status < 400) return 'redirecionamento';
+  if (status >= 200 && status < 300) return 'ok';
+  return 'desconhecido';
+}
+
+/** Tira do texto qualquer sequência de 6+ dígitos e valores longos de cookie/token antes de ir para o log. */
+function textoSeguroParaLog(texto) {
+  return String(texto || '')
+    .replace(/\d[\d.\-\/ ]{5,}\d/g, '•••')
+    .replace(/(cookie|token|code|senha|password|authorization)[=:]\s*\S+/gi, '$1=•••')
+    .slice(0, 300);
+}
+
+// ---------- Funções puras: cookies ----------
+
+/**
+ * Pote de cookies em memória: { 'host.ou.dominio': { nome: valor } }.
+ * Guarda cada `Set-Cookie` sob o `Domain` informado (sem o ponto inicial) ou sob o host da resposta.
+ * Atributos (Path, Secure, Expires…) são ignorados de propósito: tudo é HTTPS e dura só esta execução.
+ */
+function guardarCookies(pote, host, setCookie) {
+  if (!setCookie) return pote;
+  const lista = Array.isArray(setCookie) ? setCookie : [setCookie];
+  lista.forEach(function (linha) {
+    const partes = String(linha).split(';');
+    const par = partes[0];
+    const i = par.indexOf('=');
+    if (i <= 0) return;
+    const nome = par.slice(0, i).trim();
+    const valor = par.slice(i + 1).trim();
+    let dominio = String(host || '').toLowerCase();
+    partes.slice(1).forEach(function (atr) {
+      const m = atr.trim().match(/^domain=(.+)$/i);
+      if (m) dominio = m[1].trim().replace(/^\./, '').toLowerCase();
+    });
+    if (!pote[dominio]) pote[dominio] = {};
+    if (/^(deleted|)$/i.test(valor)) delete pote[dominio][nome];
+    else pote[dominio][nome] = valor;
+  });
+  return pote;
+}
+
+/** Cabeçalho `Cookie` para um host: cookies do próprio host e dos domínios-pai guardados. */
+function cabecalhoCookie(pote, host) {
+  const h = String(host || '').toLowerCase();
+  const pares = [];
+  Object.keys(pote || {}).forEach(function (dominio) {
+    if (h === dominio || h.slice(-(dominio.length + 1)) === '.' + dominio) {
+      Object.keys(pote[dominio]).forEach(function (nome) { pares.push(nome + '=' + pote[dominio][nome]); });
+    }
+  });
+  return pares.join('; ');
+}
+
+/** Quantos cookies há para um host (só para o relatório da prova de conceito, nunca os valores). */
+function contarCookies(pote, host) {
+  const c = cabecalhoCookie(pote, host);
+  return c ? c.split('; ').length : 0;
+}
+
+// ---------- Rede (UrlFetchApp) ----------
+
+/**
+ * Uma requisição sem seguir redirecionamentos, com o pote de cookies.
+ * Devolve { status, url, local (Location), texto, tipo (Content-Type) } e já guarda os Set-Cookie.
+ * Lança Error('conexao') quando o portal recusa a conexão (reset, timeout, DNS).
+ */
+function requisicaoPortal(url, opcoes, pote) {
+  const host = hostDeUrl(url);
+  const o = opcoes || {};
+  const cabecalhos = {
+    'User-Agent': 'FinancasDaFamilia/2 (robo de notas fiscais; Apps Script)',
+    Accept: 'text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'pt-BR,pt;q=0.9',
+  };
+  Object.keys(o.headers || {}).forEach(function (k) { cabecalhos[k] = o.headers[k]; });
+  const cookie = cabecalhoCookie(pote, host);
+  if (cookie) cabecalhos.Cookie = cookie;
+  const params = { method: o.method || 'get', headers: cabecalhos, followRedirects: false, muteHttpExceptions: true, validateHttpsCertificates: true };
+  if (o.payload !== undefined) {
+    params.payload = o.payload;
+    if (!cabecalhos['Content-Type'] && typeof o.payload === 'string') params.contentType = 'application/x-www-form-urlencoded';
+  }
+  let resposta;
+  try {
+    resposta = UrlFetchApp.fetch(url, params);
+  } catch (e) {
+    throw new Error('conexao: ' + textoSeguroParaLog(e && e.message));
+  }
+  const status = resposta.getResponseCode();
+  const todos = resposta.getAllHeaders() || {};
+  const chaveSet = Object.keys(todos).filter(function (k) { return k.toLowerCase() === 'set-cookie'; })[0];
+  if (chaveSet) guardarCookies(pote, host, todos[chaveSet]);
+  const chaveLoc = Object.keys(todos).filter(function (k) { return k.toLowerCase() === 'location'; })[0];
+  const chaveTipo = Object.keys(todos).filter(function (k) { return k.toLowerCase() === 'content-type'; })[0];
+  const tipo = chaveTipo ? String(todos[chaveTipo]) : '';
+  const charset = (tipo.match(/charset=([\w-]+)/i) || [])[1];
+  let texto = '';
+  try { texto = charset ? resposta.getContentText(charset) : resposta.getContentText(); } catch (e) { texto = resposta.getContentText(); }
+  return { status: status, url: url, local: chaveLoc ? String(todos[chaveLoc]) : '', texto: texto, tipo: tipo };
+}
+
+/**
+ * Segue redirecionamentos à mão (para não perder os cookies de cada host no caminho do OAuth).
+ * Para no primeiro 2xx/4xx/5xx. Devolve a última resposta mais `saltos` (lista de hosts visitados, sem
+ * query string — serve para o relatório).
+ */
+function seguirRedirecionamentos(url, pote, opcoesPrimeira) {
+  let atual = url;
+  let opcoes = opcoesPrimeira || {};
+  const saltos = [];
+  for (let i = 0; i < NOTAS_MAX_SALTOS; i++) {
+    const r = requisicaoPortal(atual, opcoes, pote);
+    saltos.push(hostDeUrl(atual) + String(atual.replace(/^[a-z]+:\/\/[^/]+/i, '').split('?')[0]));
+    if (r.status >= 300 && r.status < 400 && r.local) {
+      atual = resolverUrl(atual, r.local);
+      opcoes = {}; // depois de um 302 o navegador faz GET sem corpo
+      continue;
+    }
+    r.saltos = saltos;
+    return r;
+  }
+  throw new Error('redirecionamentos demais (' + saltos.length + ')');
+}
+
+/** Pausa de 1 a 2 s entre requisições ao portal (educação com o servidor público). */
+function pausaEntreRequisicoes() {
+  try { Utilities.sleep(1000 + Math.floor(Math.random() * 1000)); } catch (e) { /* fora do Apps Script */ }
+}
+
+// ---------- Credenciais (Propriedades do script) ----------
+
+/** Lê a credencial de um membro para uma fonte. Devolve null se não houver. Nunca registre o retorno. */
+function lerCredencialFiscal(prefixo, usuarioId) {
+  const bruto = propriedade(prefixo + usuarioId, '');
+  if (!bruto) return null;
+  try { return JSON.parse(bruto); } catch (e) { return null; }
+}
+
+/** Ids de usuário que têm credencial para o prefixo (NOTAPR_ / NOTACWB_). Só os ids, nunca os valores. */
+function listarUsuariosComCredencial(prefixo) {
+  const todas = PropertiesService.getScriptProperties().getProperties() || {};
+  return Object.keys(todas).filter(function (k) { return k.indexOf(prefixo) === 0; }).map(function (k) { return k.slice(prefixo.length); }).sort();
+}
+
+/** Grava (ou substitui) a credencial de um membro. Só escrita. */
+function gravarCredencialFiscal(fonte, usuarioId, credencial) {
+  const f = FONTES_NOTAS[fonte];
+  if (!f) throw new ErroUsuario('Fonte desconhecida: ' + fonte);
+  PropertiesService.getScriptProperties().setProperty(f.prefixo + usuarioId, JSON.stringify(credencial));
+}
+
+/** Apaga a credencial e o estado daquele membro/fonte. */
+function apagarCredencialFiscal(fonte, usuarioId) {
+  const f = FONTES_NOTAS[fonte];
+  if (!f) throw new ErroUsuario('Fonte desconhecida: ' + fonte);
+  PropertiesService.getScriptProperties().deleteProperty(f.prefixo + usuarioId);
+  gravarEstadoNotas(fonte, usuarioId, null);
+}
+
+/** Valida e normaliza a credencial vinda do app (função pura). */
+function prepararCredencialFiscal(fonte, entrada) {
+  const e = entrada || {};
+  const senha = String(e.senha || '');
+  if (!senha) throw new ErroUsuario('Informe a senha.');
+  if (fonte === 'nota_parana') {
+    const cpf = String(e.cpf || e.usuario || '').replace(/\D/g, '');
+    if (cpf.length !== 11) throw new ErroUsuario('Informe o CPF com 11 dígitos.');
+    return { cpf: cpf, senha: senha };
+  }
+  if (fonte === 'nota_curitibana') {
+    const usuario = String(e.usuario || e.cpf || '').trim();
+    if (!usuario) throw new ErroUsuario('Informe o usuário (CPF) do e-Cidadão.');
+    return { usuario: usuario, senha: senha };
+  }
+  throw new ErroUsuario('Fonte desconhecida: ' + fonte);
+}
+
+// ---------- Estado do robô por fonte/usuário (aba Config, sem segredos) ----------
+
+/** { conectado_em, ultima_leitura, ultimo_ok, notas_novas, falhas, suspenso, motivo, cursor } ou {} */
+function lerEstadoNotas(fonte, usuarioId) {
+  const bruto = lerConfigCompleta()[NOTAS_CHAVE_ESTADO + fonte + '_' + usuarioId];
+  if (!bruto) return {};
+  try { return JSON.parse(bruto) || {}; } catch (e) { return {}; }
+}
+
+function gravarEstadoNotas(fonte, usuarioId, estado) {
+  const obj = {};
+  obj[NOTAS_CHAVE_ESTADO + fonte + '_' + usuarioId] = estado ? JSON.stringify(estado) : '';
+  salvarConfigChaves(obj);
+}
+
+/** Mescla mudanças no estado e grava. */
+function atualizarEstadoNotas(fonte, usuarioId, mudancas) {
+  const novo = Object.assign({}, lerEstadoNotas(fonte, usuarioId), mudancas);
+  gravarEstadoNotas(fonte, usuarioId, novo);
+  return novo;
+}
+
+// ---------- Aba NotasFiscais ----------
+
+/** Resumo público de uma nota (para a Caixa e para o app): sem a chave inteira, com a contagem de itens. */
+function notaFiscalResumo(n) {
+  if (!n) return null;
+  let itens = [];
+  try { itens = n.itens ? JSON.parse(n.itens) : []; } catch (e) { itens = []; }
+  return {
+    id: n.id, fonte: n.fonte, tp_doc: String(n.tp_doc || ''), chave_final: String(n.chave_acesso || '').slice(-8), cnpj: n.cnpj || '', emitente: n.emitente || '',
+    data_emissao: n.data_emissao || '', valor: arredondar(n.valor), desconto: arredondar(n.desconto), frete: arredondar(n.frete), forma_pgto: n.forma_pgto || '',
+    qtd_itens: itens.length, itens: itens.slice(0, 40), situacao: n.situacao || 'normal', destino: n.destino || '', usuario_id: n.usuario_id || '',
+    lancamento_id: n.lancamento_id || '', caixa_id: n.caixa_id || '',
+  };
+}
+
+/** { caixa_id: nota } para juntar à Caixa de Entrada. */
+function indexarNotasPorCaixa(notas) {
+  const mapa = {};
+  (notas || []).forEach(function (n) { if (n.caixa_id) mapa[n.caixa_id] = n; });
+  return mapa;
+}
+
+/** Converte uma nota lida do portal (lista + detalhe) na linha da aba. */
+function montarLinhaNota(lida, detalhe, usuarioId) {
+  const d = detalhe || {};
+  return {
+    id: gerarId('nf'), fonte: lida.fonte, chave_acesso: d.chave_acesso || lida.chave_acesso || '', id_portal: String(lida.id_portal || ''), tp_doc: String(lida.tp_doc || ''),
+    usuario_id: usuarioId, cnpj: d.cnpj || lida.cnpj || '', emitente: d.emitente || lida.emitente || '',
+    data_emissao: d.data_emissao || lida.data_emissao || '', valor: arredondar(d.valor || lida.valor), frete: arredondar(d.frete), desconto: arredondar(d.desconto),
+    forma_pgto: d.forma_pgto || '', itens: d.itens && d.itens.length ? JSON.stringify(d.itens).slice(0, 45000) : '', situacao: lida.situacao || 'normal',
+    destino: '', lancamento_id: '', caixa_id: '', lida_em: agoraIso(), atualizada_em: agoraIso(),
+  };
+}
+
+/** Procura a nota já gravada: pela chave de acesso ou por fonte + id do portal (função pura). */
+function encontrarNotaGravada(lida, notas) {
+  const chave = String(lida.chave_acesso || '');
+  return (notas || []).find(function (n) { return (chave && n.chave_acesso === chave) || (n.fonte === lida.fonte && String(n.id_portal) === String(lida.id_portal)); }) || null;
+}
+
+// ---------- Conciliação (seção 5) — funções puras ----------
+
+/** Texto curto dos itens para sugerir categoria e para a Caixa ("TAT HOT FILA, CAFE PILAO…"). */
+function textoDosItens(itens, maximo) {
+  return (itens || []).slice(0, maximo || 6).map(function (i) { return String(i.d || '').trim(); }).filter(Boolean).join(', ');
+}
+
+/** Regra de loja por CNPJ ou por nome (CNPJ vale mais). Função pura. */
+function regraDaNota(cnpj, emitente, regras) {
+  const porCnpj = cnpj ? (regras || []).find(function (r) { return r.cnpj && String(r.cnpj).replace(/\D/g, '') === String(cnpj).replace(/\D/g, ''); }) : null;
+  if (porCnpj) return porCnpj;
+  const chave = normalizar(emitente);
+  let melhor = null;
+  (regras || []).forEach(function (r) {
+    const k = String(r.loja_normalizada || '');
+    if (k && (chave === k || chave.indexOf(k) >= 0) && (!melhor || k.length > melhor.loja_normalizada.length)) melhor = r;
+  });
+  return melhor;
+}
+
+/**
+ * Regra Família × Empresa (seção 6). Devolve 'empresa' | 'ignorar' | 'a_confirmar' | 'familia'.
+ * `extras` = { mes_fora_do_padrao: bool }.
+ */
+function classificarDestinoNota(nota, regras, cfg, extras) {
+  const c = cfg || {};
+  const regra = regraDaNota(nota.cnpj, nota.emitente, regras);
+  if (regra && regra.destino === 'empresa' && (Number(regra.acertos) || 0) >= 2) return 'empresa';
+  if (regra && regra.destino === 'ignorar' && (Number(regra.acertos) || 0) >= 2) return 'ignorar';
+  const limiteGrande = Number(c.notas_limite_grande) > 0 ? Number(c.notas_limite_grande) : 1500;
+  const limiteDireto = Number(c.notas_limite_direto) > 0 ? Number(c.notas_limite_direto) : 500;
+  if (nota.valor > limiteGrande) return 'a_confirmar';
+  if (String(nota.tp_doc) === '1' && nota.valor > limiteDireto) return 'a_confirmar';
+  if (extras && extras.mes_fora_do_padrao) return 'a_confirmar';
+  return 'familia';
+}
+
+/** Mesma loja? primeira palavra igual ou mesmo CNPJ dentro do texto (função pura). */
+function mesmaLoja(a, b, cnpj) {
+  const marcantes = function (s) { return normalizar(s).split(' ').filter(function (p) { return p.length >= 3 && PALAVRAS_GENERICAS_LOJA.indexOf(p) < 0; }); };
+  const pa = marcantes(a), pb = marcantes(b);
+  if (pa.length && pb.length && pa[0] === pb[0]) return true;
+  if (pa.some(function (p) { return p.length >= 4 && pb.indexOf(p) >= 0; })) return true;
+  if (cnpj && String(b || '').replace(/\D/g, '').indexOf(String(cnpj)) >= 0) return true;
+  return false;
+}
+/** Palavras que não identificam a loja (razão social × nome fantasia). */
+const PALAVRAS_GENERICAS_LOJA = ['LTDA', 'EIRELI', 'EPP', 'CIA', 'COMERCIO', 'COMERCIAL', 'INDUSTRIA', 'SUPERMERCADO', 'SUPERMERCADOS', 'SUPER', 'MERCADO', 'CENTER', 'LOJA', 'LOJAS', 'FARMACIA', 'DROGARIA', 'POSTO', 'RESTAURANTE', 'PADARIA', 'MATERIAIS', 'CONSTRUCAO', 'ATACADO', 'VAREJO', 'DISTRIBUIDORA', 'SERVICOS', 'BRASIL', 'BRASILEIRA', 'DOS', 'DAS', 'THE', 'AND', 'COM', 'PARA'];
+
+/** Lançamento que corresponde à nota (função pura): pela chave, ou valor ±0,01 + data ±2 dias + mesma loja/CNPJ. */
+function encontrarLancamentoDaNota(nota, lancamentos) {
+  const chave = String(nota.chave_acesso || '');
+  const data = String(nota.data_emissao || '').slice(0, 10);
+  let achado = null;
+  (lancamentos || []).forEach(function (l) {
+    if (achado || l.excluido) return;
+    if (chave && chave.length >= 40 && (String(l.anexo_url || '').indexOf(chave) >= 0 || String(l.descricao || '').indexOf(chave) >= 0)) { achado = l; return; }
+    if (Math.abs(Number(l.valor) - Number(nota.valor)) < 0.011 && data && Math.abs(diferencaDias(l.data, data)) <= 2 && mesmaLoja(nota.emitente, l.estabelecimento || l.descricao, nota.cnpj)) achado = l;
+  });
+  return achado;
+}
+
+/** Item pendente (ou à espera da nota) da Caixa que corresponde à nota (função pura). */
+function encontrarItemCaixaDaNota(nota, itens) {
+  const data = String(nota.data_emissao || '').slice(0, 10);
+  return (itens || []).find(function (c) {
+    if (c.status === 'aguardando_nota') return (!c.usuario_id || c.usuario_id === nota.usuario_id) && mesmaLoja(nota.emitente, c.estabelecimento, nota.cnpj) && (!c.data_compra || !data || Math.abs(diferencaDias(c.data_compra, data)) <= 3) && (!(c.valor > 0) || Math.abs(c.valor - nota.valor) < 0.011);
+    if (c.status !== 'pendente') return false;
+    return Math.abs(Number(c.valor) - Number(nota.valor)) < 0.011 && data && Math.abs(diferencaDias(c.data_compra, data)) <= 2 && mesmaLoja(nota.emitente, c.estabelecimento, nota.cnpj);
+  }) || null;
+}
+
+/**
+ * Decide o que fazer com uma nota nova (função pura, seção 5):
+ *  { tipo: 'enriquecer', lancamento } · { tipo: 'anexar_caixa', item } · { tipo: 'direto', categoria_id, regra }
+ *  · { tipo: 'caixa', sugestoes, destino } · { tipo: 'guardar', destino }  (empresa/ignorar: só guarda).
+ */
+function decidirConciliacao(nota, d, extras) {
+  const regras = d.regras_loja || [];
+  const destino = classificarDestinoNota(nota, regras, d.config, extras);
+  if (destino === 'empresa' || destino === 'ignorar') return { tipo: 'guardar', destino: destino };
+  const l = encontrarLancamentoDaNota(nota, d.lancamentos);
+  if (l) return { tipo: 'enriquecer', lancamento: l, destino: 'familia' };
+  const item = encontrarItemCaixaDaNota(nota, d.caixa_entrada);
+  if (item) return { tipo: 'anexar_caixa', item: item, destino: destino };
+  let itens = [];
+  try { itens = nota.itens ? (typeof nota.itens === 'string' ? JSON.parse(nota.itens) : nota.itens) : []; } catch (e) { itens = []; }
+  const texto = (nota.emitente || '') + ' ' + textoDosItens(itens, 10);
+  const sugestoes = aplicarRegraLoja(nota.emitente, sugerirCategoria(texto, d.categorias), regras);
+  const regra = regraDaNota(nota.cnpj, nota.emitente, regras);
+  const limiteDireto = Number(d.config && d.config.notas_limite_direto) > 0 ? Number(d.config.notas_limite_direto) : 500;
+  if (destino === 'familia' && regra && regra.categoria_id && (Number(regra.acertos) || 0) >= 3 && (regra.destino || 'familia') === 'familia' && nota.valor <= limiteDireto && nota.situacao === 'normal') {
+    return { tipo: 'direto', categoria_id: regra.categoria_id, regra: regra, destino: 'familia', sugestoes: sugestoes };
+  }
+  return { tipo: 'caixa', sugestoes: sugestoes, destino: destino };
+}
+
+/** Total das notas de um CPF no mês vs. 3× a média dos 6 meses anteriores (função pura). */
+function mesForaDoPadraoNotas(notas, usuarioId, competencia) {
+  const minhas = (notas || []).filter(function (n) { return n.usuario_id === usuarioId && n.situacao !== 'cancelada' && n.destino !== 'empresa' && n.destino !== 'ignorar'; });
+  const totalMes = somar(minhas.filter(function (n) { return String(n.data_emissao || '').slice(0, 7) === competencia; }), function (n) { return n.valor; });
+  const anteriores = [];
+  for (let k = 1; k <= 6; k++) {
+    const c = somarMeses(competencia, -k);
+    const t = somar(minhas.filter(function (n) { return String(n.data_emissao || '').slice(0, 7) === c; }), function (n) { return n.valor; });
+    if (t > 0) anteriores.push(t);
+  }
+  if (anteriores.length < 2) return { fora: false, total: arredondar(totalMes), media: 0 };
+  const media = somar(anteriores, function (x) { return x; }) / anteriores.length;
+  return { fora: totalMes > 3 * media, total: arredondar(totalMes), media: arredondar(media) };
+}
+
+// ---------- Conciliação — aplica na planilha ----------
+
+/** Texto da Caixa para uma nota (sem dados pessoais): "Nota fiscal · 23 itens: CAFE, LEITE…". */
+function textoCaixaDaNota(nota) {
+  let itens = [];
+  try { itens = nota.itens ? JSON.parse(nota.itens) : []; } catch (e) { itens = []; }
+  const fonte = FONTES_NOTAS[nota.fonte] ? FONTES_NOTAS[nota.fonte].nome : 'Nota fiscal';
+  const base = fonte + (nota.tp_doc === 'nfse' ? ' · serviço' : nota.tp_doc === '1' ? ' · NF-e' : ' · cupom') + (itens.length ? ' · ' + itens.length + ' ite' + (itens.length === 1 ? 'm' : 'ns') + ': ' + textoDosItens(itens, 6) : '');
+  return base.slice(0, 400);
+}
+
+/**
+ * Processa uma nota já lida (lista + detalhe) para um usuário: grava na aba e concilia.
+ * Devolve { acao, nota } com acao ∈ atualizada · enriquecida · anexada · lancada · caixa · guardada · a_confirmar.
+ */
+function processarNota(lida, detalhe, usuarioId, d, extras) {
+  const existentes = d.notas_fiscais || lerAba('NotasFiscais');
+  const gravada = encontrarNotaGravada(lida, existentes);
+  if (gravada) {
+    const mudancas = { atualizada_em: agoraIso() };
+    if (lida.situacao && lida.situacao !== gravada.situacao) {
+      mudancas.situacao = lida.situacao;
+      if (lida.situacao === 'cancelada' && gravada.lancamento_id) {
+        try { atualizarPorId('Lancamentos', gravada.lancamento_id, { status: 'a_confirmar' }); } catch (e) { /* ignora */ }
+        mudancas.destino = 'a_confirmar';
+      }
+    }
+    if (detalhe && detalhe.itens && detalhe.itens.length && !gravada.itens) { mudancas.itens = JSON.stringify(detalhe.itens).slice(0, 45000); if (detalhe.chave_acesso) mudancas.chave_acesso = detalhe.chave_acesso; }
+    const nova = atualizarPorId('NotasFiscais', gravada.id, mudancas) || gravada;
+    return { acao: mudancas.situacao === 'cancelada' ? 'cancelada' : 'atualizada', nota: nova };
+  }
+  const linha = montarLinhaNota(lida, detalhe, usuarioId);
+  if (linha.situacao !== 'normal') {
+    linha.destino = 'ignorar';
+    const n = inserirLinhas('NotasFiscais', [linha])[0];
+    existentes.push(n);
+    return { acao: 'guardada', nota: n };
+  }
+  const decisao = decidirConciliacao(linha, d, extras);
+  linha.destino = decisao.destino;
+  if (decisao.tipo === 'enriquecer') {
+    const l = decisao.lancamento;
+    const mudancas = {};
+    if (linha.emitente && (!l.estabelecimento || normalizar(l.estabelecimento).length < normalizar(linha.emitente).length)) mudancas.estabelecimento = linha.emitente;
+    if (Object.keys(mudancas).length) { try { atualizarPorId('Lancamentos', l.id, mudancas); } catch (e) { /* ignora */ } }
+    linha.lancamento_id = l.id;
+    const n = inserirLinhas('NotasFiscais', [linha])[0];
+    existentes.push(n);
+    return { acao: 'enriquecida', nota: n };
+  }
+  if (decisao.tipo === 'anexar_caixa') {
+    const item = decisao.item;
+    const mudancas = { texto_bruto: (String(item.texto_bruto || '') + ' · ' + textoCaixaDaNota(linha)).slice(0, 500) };
+    if (item.status === 'aguardando_nota') { mudancas.status = 'pendente'; mudancas.valor = linha.valor; mudancas.data_compra = String(linha.data_emissao || item.data_compra || '').slice(0, 10) || item.data_compra; mudancas.estabelecimento = linha.emitente || item.estabelecimento; mudancas.canal = linha.fonte; }
+    if (!item.estabelecimento && linha.emitente) mudancas.estabelecimento = linha.emitente;
+    atualizarPorId('CaixaEntrada', item.id, mudancas);
+    linha.caixa_id = item.id;
+    const n = inserirLinhas('NotasFiscais', [linha])[0];
+    existentes.push(n);
+    return { acao: 'anexada', nota: n };
+  }
+  if (decisao.tipo === 'direto') {
+    const data = String(linha.data_emissao || hojeIso()).slice(0, 10);
+    const l = inserirLinhas('Lancamentos', [{
+      id: gerarId('l'), data: data, competencia: competenciaDe(data), tipo: 'despesa', valor: linha.valor, categoria_id: decisao.categoria_id,
+      descricao: linha.emitente, estabelecimento: linha.emitente, forma_pgto: formaPgtoDaNota(linha.forma_pgto), cartao_id: '', parcela: '',
+      usuario_id: usuarioId, origem: linha.fonte, anexo_url: '', status: 'confirmado', hash_dedup: hashDedup(linha.valor, data, '', linha.emitente),
+      criado_em: agoraIso(), editado_por: '', excluido: false, projeto_id: '',
+    }])[0];
+    d.lancamentos.push(l);
+    linha.lancamento_id = l.id;
+    const n = inserirLinhas('NotasFiscais', [linha])[0];
+    existentes.push(n);
+    return { acao: 'lancada', nota: n, lancamento: l, categoria_id: decisao.categoria_id };
+  }
+  if (decisao.tipo === 'guardar') {
+    const n = inserirLinhas('NotasFiscais', [linha])[0];
+    existentes.push(n);
+    return { acao: 'guardada', nota: n };
+  }
+  // Caixa de Entrada (pendente ou a confirmar: Família / Empresa / Ignorar).
+  const data = String(linha.data_emissao || hojeIso()).slice(0, 10);
+  const item = inserirLinhas('CaixaEntrada', [{
+    id: gerarId('ce'), recebido_em: agoraIso(), canal: linha.fonte, texto_bruto: textoCaixaDaNota(linha), valor: linha.valor, estabelecimento: linha.emitente,
+    final_cartao: '', data_compra: data, sugestao_categoria: decisao.sugestoes[0] || 'c_imprevistos', sugestoes: decisao.sugestoes, usuario_id: usuarioId,
+    status: 'pendente', lancamento_id: '', hash_dedup: hashDedup(linha.valor, data, '', linha.emitente),
+  }])[0];
+  d.caixa_entrada.push(item);
+  linha.caixa_id = item.id;
+  const n = inserirLinhas('NotasFiscais', [linha])[0];
+  existentes.push(n);
+  return { acao: decisao.destino === 'a_confirmar' ? 'a_confirmar' : 'caixa', nota: n, item: item };
+}
+
+// ---------- Aprendizado por CNPJ (seção 6) ----------
+
+/** Grava a escolha Família/Empresa/Ignorar para o CNPJ (ou nome). Depois de 2 escolhas iguais vira regra. */
+function aprenderDestinoNota(nota, destino, uid) {
+  const regras = lerAba('RegrasLoja');
+  const chaveNome = normalizar(nota.emitente);
+  const cnpj = String(nota.cnpj || '').replace(/\D/g, '');
+  let regra = cnpj ? regras.find(function (r) { return String(r.cnpj || '') === cnpj; }) : null;
+  if (!regra && chaveNome) regra = regras.find(function (r) { return r.loja_normalizada === chaveNome; }) || null;
+  if (regra) {
+    const mesmo = (regra.destino || 'familia') === destino;
+    return atualizarPorId('RegrasLoja', regra.id, { destino: destino, cnpj: regra.cnpj || cnpj, acertos: mesmo ? (Number(regra.acertos) || 0) + 1 : 1 });
+  }
+  if (!chaveNome && !cnpj) return null;
+  return inserirLinhas('RegrasLoja', [{ id: gerarId('rl'), loja_normalizada: chaveNome, categoria_id: '', criado_por: uid || '', criado_em: agoraIso(), acertos: 1, destino: destino, cnpj: cnpj }])[0];
+}
+
+// ---------- Sincronização (seção 7) ----------
+
+/** Meses da janela: mês atual + anterior ({ ano, mes, competencia }). */
+function mesesDaJanela(quantos, hoje) {
+  const comp = competenciaDe(hoje || hojeIso());
+  const saida = [];
+  for (let k = 0; k < (quantos || 2); k++) {
+    const c = somarMeses(comp, -k);
+    saida.push({ ano: Number(c.slice(0, 4)), mes: Number(c.slice(5, 7)), competencia: c });
+  }
+  return saida;
+}
+
+/** Registra uma falha de login; na 2ª seguida suspende a fonte e avisa o administrador. */
+function registrarFalhaLogin(fonte, uid, motivo) {
+  const estado = lerEstadoNotas(fonte, uid);
+  const falhas = (Number(estado.falhas) || 0) + 1;
+  const suspender = falhas >= NOTAS_MAX_FALHAS_LOGIN || motivo === 'desafio' || motivo === 'bloqueado';
+  atualizarEstadoNotas(fonte, uid, { falhas: falhas, ultima_leitura: agoraIso(), motivo: motivo, suspenso: suspender });
+  if (suspender) {
+    const nome = FONTES_NOTAS[fonte].nome;
+    const u = buscarPorId('Usuarios', uid);
+    const texto = motivo === 'senha_invalida' ? 'A senha do ' + nome + ' de ' + (u ? u.apelido : uid) + ' parece ter mudado. Reconecte em Configurações → Notas fiscais.'
+      : motivo === 'desafio' ? 'O ' + nome + ' passou a pedir um desafio (captcha) no login. O robô foi pausado para ' + (u ? u.apelido : uid) + '.'
+      : motivo === 'bloqueado' || motivo === 'conexao_recusada' ? 'O ' + nome + ' não aceitou a conexão do robô (' + motivo + '). Veja o Plano B em docs/ROBO_NOTAS_FISCAIS.md.'
+      : 'O robô do ' + nome + ' falhou 2 vezes seguidas para ' + (u ? u.apelido : uid) + ' (' + motivo + ') e foi pausado.';
+    try { notificarPerfis(['Administrador'], 'Robô de notas fiscais pausado', texto, '#/configuracoes/notas-fiscais'); } catch (e) { console.warn('aviso: ' + e.message); }
+  }
+  return suspender;
+}
+
+/**
+ * Sincroniza uma fonte para um membro. Devolve { ok, motivo, novas, atualizadas, lancadas, caixa, a_confirmar,
+ * enriquecidas, canceladas, restantes, resumo_itens: [...] }.
+ * `opcoes`: { meses (janela), maxDetalhes, prazoMs, historico (bool) }.
+ */
+function sincronizarFonteUsuario(fonte, uid, opcoes) {
+  const o = opcoes || {};
+  const inicio = Date.now();
+  const r = { fonte: fonte, usuario_id: uid, ok: false, motivo: '', novas: 0, atualizadas: 0, lancadas: 0, caixa: 0, a_confirmar: 0, enriquecidas: 0, anexadas: 0, canceladas: 0, guardadas: 0, restantes: 0, itens: [] };
+  const cred = lerCredencialFiscal(FONTES_NOTAS[fonte].prefixo, uid);
+  if (!cred) { r.motivo = 'sem credencial'; return r; }
+  const estado = lerEstadoNotas(fonte, uid);
+  if (estado.suspenso && !o.forcar) { r.motivo = 'suspenso: ' + (estado.motivo || ''); return r; }
+  const janela = o.meses || mesesDaJanela(2);
+  const leitura = fonte === 'nota_parana' ? lerNotaParana(cred, janela) : lerNotaCuritibana(cred, janela.length);
+  if (!leitura.ok) {
+    r.motivo = leitura.motivo;
+    registrarFalhaLogin(fonte, uid, leitura.motivo);
+    return r;
+  }
+  atualizarEstadoNotas(fonte, uid, { falhas: 0, suspenso: false, motivo: '', ultimo_ok: agoraIso() });
+  const d = carregarDados();
+  d.caixa_entrada = lerAba('CaixaEntrada');
+  d.notas_fiscais = lerAba('NotasFiscais');
+  const comp = competenciaDe();
+  const padrao = mesForaDoPadraoNotas(d.notas_fiscais.concat(leitura.notas.map(function (n) { return { usuario_id: uid, situacao: n.situacao, destino: '', data_emissao: n.data_emissao, valor: n.valor }; })), uid, comp);
+  const extras = { mes_fora_do_padrao: padrao.fora };
+  if (padrao.fora) {
+    try { guardarAviso({ id: 'av_nf_padrao_' + uid + '_' + comp, data: hojeIso(), tipo: 'fora_do_padrao', titulo: 'Mês com notas fora do padrão', detalhe: 'As notas fiscais de ' + nomeMes(comp) + ' somam ' + moeda(padrao.total) + ', contra uma média de ' + moeda(padrao.media) + ' — parece haver compras da empresa. Confira na Caixa de Entrada.', gravidade: 'warn', acao: { rotulo: 'abrir', rota: '/caixa' } }, uid); } catch (e) { /* ignora */ }
+  }
+  const maxDetalhes = o.maxDetalhes || NOTAS_MAX_DETALHES_POR_EXECUCAO;
+  const prazo = o.prazoMs || NOTAS_TEMPO_MAXIMO_MS;
+  let detalhesBaixados = 0;
+  leitura.notas.forEach(function (lida) {
+    const gravada = encontrarNotaGravada(lida, d.notas_fiscais);
+    if (gravada) {
+      if (lida.situacao !== gravada.situacao) { const p = processarNota(lida, null, uid, d, extras); r.atualizadas++; if (p.acao === 'cancelada') { r.canceladas++; r.itens.push({ acao: 'cancelada', emitente: gravada.emitente, valor: gravada.valor }); } }
+      return;
+    }
+    if (detalhesBaixados >= maxDetalhes || Date.now() - inicio > prazo) { r.restantes++; return; }
+    let detalhe = null;
+    if (fonte === 'nota_parana' && lida.situacao === 'normal') {
+      pausaEntreRequisicoes();
+      try { detalhe = lerDanfeNotaParana(leitura.pote, lida.tp_doc, lida.id_portal); } catch (e) { detalhe = null; }
+      detalhesBaixados++;
+    }
+    const p = processarNota(lida, detalhe, uid, d, extras);
+    r.novas++;
+    if (p.acao === 'lancada') r.lancadas++;
+    else if (p.acao === 'caixa') r.caixa++;
+    else if (p.acao === 'a_confirmar') r.a_confirmar++;
+    else if (p.acao === 'enriquecida') r.enriquecidas++;
+    else if (p.acao === 'anexada') r.anexadas++;
+    else if (p.acao === 'guardada') r.guardadas++;
+    r.itens.push({ acao: p.acao, emitente: p.nota.emitente, valor: p.nota.valor, lancamento_id: p.lancamento ? p.lancamento.id : '', categoria_id: p.categoria_id || '' });
+  });
+  // Mais de metade dos detalhes vazios → o portal mudou o HTML.
+  const vazios = r.itens.filter(function (i) { return i.acao !== 'cancelada' && !(i.valor > 0); }).length;
+  if (fonte === 'nota_parana' && r.novas >= 4 && vazios > r.novas / 2) {
+    atualizarEstadoNotas(fonte, uid, { suspenso: true, motivo: 'html_mudou' });
+    try { notificarPerfis(['Administrador'], 'O Nota Paraná mudou', 'A leitura veio vazia em mais da metade das notas. O robô precisa de ajuste e foi pausado.', '#/configuracoes/notas-fiscais'); } catch (e) { /* ignora */ }
+  }
+  r.ok = true;
+  r.motivo = 'ok';
+  atualizarEstadoNotas(fonte, uid, { ultima_leitura: agoraIso(), notas_novas: r.novas, restantes: r.restantes });
+  return r;
+}
+
+/** Monta a frase do resumo: "3 notas novas · R$ 2.531,48 · 1 para confirmar (Filtros Curitiba, R$ 2.104,69: Família ou Empresa?)". */
+function resumoSincronizacao(resultados) {
+  const novas = resultados.filter(function (i) { return i.acao !== 'cancelada' && i.acao !== 'atualizada'; });
+  if (!novas.length) return '';
+  const total = somar(novas, function (i) { return i.valor; });
+  const partes = [novas.length + ' nota' + (novas.length === 1 ? ' nova' : 's novas'), moeda(total)];
+  const confirmar = novas.filter(function (i) { return i.acao === 'a_confirmar'; });
+  if (confirmar.length) partes.push(confirmar.length + ' para confirmar (' + confirmar.slice(0, 2).map(function (i) { return i.emitente + ', ' + moeda(i.valor) + ': Família ou Empresa?'; }).join('; ') + ')');
+  const lancadas = novas.filter(function (i) { return i.acao === 'lancada'; });
+  if (lancadas.length) partes.push(lancadas.length + ' lançada' + (lancadas.length === 1 ? '' : 's') + ' direto (' + lancadas.slice(0, 3).map(function (i) { return i.emitente; }).join(', ') + ') — para desfazer, abra o lançamento');
+  const caixa = novas.filter(function (i) { return i.acao === 'caixa' || i.acao === 'anexada'; });
+  if (caixa.length) partes.push(caixa.length + ' na Caixa de Entrada');
+  return partes.join(' · ');
+}
+
+/**
+ * Rotina do gatilho (a cada 6 h e às 21h): sincroniza todas as fontes de todos os membros com credencial.
+ * `opcoes.usuario_id` restringe a um membro; `opcoes.fonte` a uma fonte. Devolve o resumo por membro.
+ */
+function sincronizarNotasFiscais(opcoes) {
+  const o = opcoes || {};
+  const cfg = lerConfig();
+  if (cfg.rotina_notas === false && !o.forcar) { console.log('sincronizarNotasFiscais: rotina desligada na Config'); return []; }
+  const saida = [];
+  Object.keys(FONTES_NOTAS).forEach(function (fonte) {
+    if (o.fonte && o.fonte !== fonte) return;
+    listarUsuariosComCredencial(FONTES_NOTAS[fonte].prefixo).forEach(function (uid) {
+      if (o.usuario_id && o.usuario_id !== uid) return;
+      let r;
+      try { r = sincronizarFonteUsuario(fonte, uid, o); } catch (e) { r = { fonte: fonte, usuario_id: uid, ok: false, motivo: 'erro: ' + textoSeguroParaLog(e.message), itens: [] }; console.error('sincronizar ' + fonte + ': ' + textoSeguroParaLog(e.message)); }
+      saida.push(r);
+      if (r.ok && r.itens.length && !o.silencioso) {
+        const texto = resumoSincronizacao(r.itens);
+        if (texto) { try { notificarUsuario(uid, FONTES_NOTAS[fonte].nome + ': ' + texto.split(' · ')[0], texto, '#/caixa'); } catch (e) { console.warn('aviso: ' + e.message); } }
+      }
+    });
+  });
+  const totalNovas = somar(saida, function (r) { return r.novas || 0; });
+  console.log('sincronizarNotasFiscais: ' + saida.length + ' leitura(s), ' + totalNovas + ' nota(s) nova(s)');
+  return saida;
+}
+
+// ---------- Busca por loja (seção 8) ----------
+
+/** Nome aproximado: "Condor" casa com "CONDOR SUPER CENTER LTDA"; também pelo CNPJ das RegrasLoja (função pura). */
+function notaCombinaComLoja(nota, loja, regras) {
+  const alvo = normalizar(loja);
+  if (!alvo) return false;
+  const emitente = normalizar(nota.emitente);
+  if (emitente.indexOf(alvo) >= 0) return true;
+  const palavras = alvo.split(' ').filter(function (p) { return p.length >= 3; });
+  if (palavras.length && palavras.every(function (p) { return emitente.indexOf(p) >= 0; })) return true;
+  const regra = (regras || []).find(function (r) { return r.loja_normalizada && (r.loja_normalizada === alvo || r.loja_normalizada.indexOf(alvo) >= 0) && r.cnpj; });
+  return !!(regra && nota.cnpj && String(regra.cnpj) === String(nota.cnpj));
+}
+
+/** Filtra as notas do usuário pela loja (e data ±3 dias / valor ±0,01, se informados). Função pura. */
+function filtrarNotasPorLoja(notas, usuarioId, loja, data, valor, regras) {
+  return (notas || []).filter(function (n) {
+    if (n.usuario_id !== usuarioId || n.situacao === 'cancelada' || n.destino === 'empresa' || n.destino === 'ignorar') return false;
+    if (!notaCombinaComLoja(n, loja, regras)) return false;
+    if (data && Math.abs(diferencaDias(String(n.data_emissao).slice(0, 10), data)) > 3) return false;
+    if (valor > 0 && Math.abs(Number(n.valor) - Number(valor)) > 0.011) return false;
+    return true;
+  }).sort(function (a, b) { return a.data_emissao < b.data_emissao ? 1 : -1; });
+}
+
+/** "hoje 18:42" / "ontem" / "03/11 18:42" para a resposta falada. */
+function quandoDaNota(dataEmissao, hoje) {
+  const h = hoje || hojeIso();
+  const dia = String(dataEmissao || '').slice(0, 10);
+  const hora = String(dataEmissao || '').slice(11, 16);
+  const dif = diferencaDias(h, dia);
+  const quando = dif === 0 ? 'hoje' : dif === 1 ? 'ontem' : dataBr(dia);
+  return quando + (hora ? ' ' + hora : '');
+}
+
+/**
+ * Procura a compra de uma loja nas notas do usuário e lança/enriquece (seção 8). Devolve
+ * { status: 'lancado'|'varias'|'aguardando'|'pendente', texto, lancamento?, notas?, item? }.
+ */
+function buscarNotaFiscalParaUsuario(ctx, loja, data, valor, sincronizar) {
+  const l = String(loja || '').trim();
+  if (!l) throw new ErroUsuario('Diga o nome da loja.');
+  const uid = ctx.uid;
+  const regras = lerAba('RegrasLoja');
+  let notas = filtrarNotasPorLoja(lerAba('NotasFiscais'), uid, l, data, valor, regras);
+  const temCredencial = Object.keys(FONTES_NOTAS).some(function (f) { return !!lerCredencialFiscal(FONTES_NOTAS[f].prefixo, uid); });
+  if (!notas.length && sincronizar !== false && temCredencial) {
+    try { sincronizarNotasFiscais({ usuario_id: uid, meses: mesesDaJanela(1), maxDetalhes: 15, silencioso: true, forcar: true }); } catch (e) { console.warn('sincronizar: ' + textoSeguroParaLog(e.message)); }
+    notas = filtrarNotasPorLoja(lerAba('NotasFiscais'), uid, l, data, valor, regras);
+  }
+  const naoResolvidas = notas.filter(function (n) { return !n.lancamento_id; });
+  if (naoResolvidas.length === 1 || (naoResolvidas.length === 0 && notas.length === 1)) {
+    const n = naoResolvidas[0] || notas[0];
+    return lancarNotaEncontrada(ctx, n);
+  }
+  if (notas.length > 1) {
+    return { status: 'varias', texto: 'Encontrei ' + notas.length + ' compras em ' + l + ': ' + notas.slice(0, 5).map(function (n) { return quandoDaNota(n.data_emissao) + ' ' + moeda(n.valor) + (n.lancamento_id ? ' (já lançada)' : ''); }).join('; ') + '. Qual delas?', notas: notas.slice(0, 5).map(notaFiscalResumo) };
+  }
+  // Nenhuma: cria a espera na Caixa.
+  const dataCompra = data || hojeIso();
+  const jaEspera = lerAba('CaixaEntrada').find(function (c) { return c.status === 'aguardando_nota' && c.usuario_id === uid && normalizar(c.estabelecimento) === normalizar(l); });
+  const item = jaEspera || inserirLinhas('CaixaEntrada', [{
+    id: gerarId('ce'), recebido_em: agoraIso(), canal: 'nota_parana', texto_bruto: 'Compra dita por voz/assistente: aguardando a nota fiscal', valor: valor > 0 ? lerValor(valor) : 0, estabelecimento: l,
+    final_cartao: '', data_compra: dataCompra, sugestao_categoria: aplicarRegraLoja(l, sugerirCategoria(l, lerAba('Categorias')), regras)[0] || 'c_imprevistos',
+    sugestoes: aplicarRegraLoja(l, sugerirCategoria(l, lerAba('Categorias')), regras), usuario_id: uid, status: 'aguardando_nota', lancamento_id: '', hash_dedup: '',
+  }])[0];
+  const texto = temCredencial
+    ? 'A nota de ' + l + ' ainda não apareceu no ' + (FONTES_NOTAS.nota_parana.nome) + '. Vou procurar de novo às 21h e te aviso. Se quiser, me diga o valor que eu lanço agora e junto com a nota depois.'
+    : 'Ainda não há conexão com o Nota Paraná para buscar a nota de ' + l + '. Um administrador conecta em Configurações → Notas fiscais. Se quiser, me diga o valor que eu lanço agora.';
+  return { status: 'aguardando', texto: texto, item: itemCaixaPublico(item) };
+}
+
+/** Lança (ou enriquece) a nota encontrada e monta a frase da resposta. */
+function lancarNotaEncontrada(ctx, nota) {
+  const d = carregarDados();
+  d.caixa_entrada = lerAba('CaixaEntrada');
+  const cats = indexarPorId(d.categorias);
+  let itens = [];
+  try { itens = nota.itens ? JSON.parse(nota.itens) : []; } catch (e) { itens = []; }
+  if (nota.lancamento_id) {
+    const l = buscarPorId('Lancamentos', nota.lancamento_id);
+    const cat = l ? cats[l.categoria_id] : null;
+    return { status: 'lancado', texto: nota.emitente + ', ' + quandoDaNota(nota.data_emissao) + ', ' + moeda(nota.valor) + (itens.length ? ', ' + itens.length + ' itens' : '') + '. Essa compra já estava lançada' + (cat ? ' em ' + cat.nome : '') + '.', lancamento: l ? lancamentoPublico(l) : undefined, nota: notaFiscalResumo(nota) };
+  }
+  const regras = d.regras_loja;
+  const sugestoes = aplicarRegraLoja(nota.emitente, sugerirCategoria(nota.emitente + ' ' + textoDosItens(itens, 10), d.categorias), regras);
+  const categoriaId = sugestoes[0] || 'c_imprevistos';
+  const data = String(nota.data_emissao || hojeIso()).slice(0, 10);
+  const l = acaoSalvarLancamento({ lancamento: { valor: nota.valor, data: data, categoria_id: categoriaId, descricao: nota.emitente, estabelecimento: nota.emitente, forma_pgto: formaPgtoDaNota(nota.forma_pgto), origem: nota.fonte, usuario_id: nota.usuario_id || ctx.uid } }, ctx)[0];
+  const mudancas = { lancamento_id: l.id, destino: 'familia', atualizada_em: agoraIso() };
+  if (nota.caixa_id) { try { atualizarPorId('CaixaEntrada', nota.caixa_id, { status: 'lançado', lancamento_id: l.id }); } catch (e) { /* ignora */ } }
+  atualizarPorId('NotasFiscais', nota.id, mudancas);
+  const cat = cats[categoriaId];
+  return { status: 'lancado', texto: nota.emitente + ', ' + quandoDaNota(nota.data_emissao) + ', ' + moeda(nota.valor) + (itens.length ? ', ' + itens.length + ' itens' : '') + '. Lancei em ' + (cat ? cat.nome : 'Imprevistos') + '. Era da família toda?', lancamento: l, nota: notaFiscalResumo(Object.assign({}, nota, mudancas)) };
+}
+
+/** Frase "comprei no Condor" sem valor → loja (função pura). Devolve '' quando a frase tem valor ou não é de compra. */
+function lojaDeFraseSemValor(texto) {
+  const t = String(texto || '').trim();
+  if (!t || extrairValor(t) > 0) return '';
+  const m = t.match(/^(?:eu\s+)?(?:comprei|gastei|paguei|passei|fiz\s+compra)\s+(?:hoje|ontem|agora|de\s+manh[aã]|à\s+tarde|à\s+noite)?\s*(?:no|na|em|do|da|nos|nas)\s+(.+?)(?:[,;]?\s+(?:hoje|ontem|agora|com\s+cpf|na\s+nota|pedi\s+cpf).*)?[.!?,;]*$/i);
+  if (!m) return '';
+  const loja = m[1].replace(/\b(cpf|nota|cart[aã]o|cr[eé]dito|d[eé]bito|pix|dinheiro)\b.*$/i, '').replace(/[,.;!?]+$/, '').trim().replace(/(?:\s+(?:no|na|em|com|de|do|da|nos|nas))+$/i, '').trim();
+  return loja.length >= 3 ? loja : '';
+}
+
+// ---------- Ações da API (seção 9) ----------
+
+/** status_notas_fiscais (Adulto): conexões, última leitura, contagens e erros — nunca a credencial. */
+function acaoStatusNotasFiscais(p, ctx) {
+  const notas = lerAba('NotasFiscais');
+  const usuarios = lerAba('Usuarios').filter(function (u) { return u.ativo && normalizarPerfil(u.perfil) !== 'Dependente'; });
+  const conexoes = [];
+  usuarios.forEach(function (u) {
+    Object.keys(FONTES_NOTAS).forEach(function (fonte) {
+      const tem = !!lerCredencialFiscal(FONTES_NOTAS[fonte].prefixo, u.id);
+      const estado = lerEstadoNotas(fonte, u.id);
+      const minhas = notas.filter(function (n) { return n.fonte === fonte && n.usuario_id === u.id; });
+      conexoes.push({ fonte: fonte, nome_fonte: FONTES_NOTAS[fonte].nome, usuario_id: u.id, conectado: tem, conectado_em: estado.conectado_em || '', ultima_leitura: estado.ultima_leitura || '', ultimo_ok: estado.ultimo_ok || '', notas_novas: Number(estado.notas_novas) || 0, suspenso: !!estado.suspenso, motivo: estado.motivo || '', falhas: Number(estado.falhas) || 0, total_notas: minhas.length, restantes: Number(estado.restantes) || 0 });
+    });
+  });
+  const comp = competenciaDe();
+  const doMes = notas.filter(function (n) { return String(n.data_emissao || '').slice(0, 7) === comp && n.situacao !== 'cancelada'; });
+  const cfg = lerConfig();
+  return {
+    conexoes: conexoes,
+    contagens: { total: notas.length, mes: doMes.length, valor_mes: arredondar(somar(doMes, function (n) { return n.valor; })), a_confirmar: notas.filter(function (n) { return n.destino === 'a_confirmar'; }).length, empresa: notas.filter(function (n) { return n.destino === 'empresa'; }).length },
+    limites: { direto: Number(cfg.notas_limite_direto) || 500, grande: Number(cfg.notas_limite_grande) || 1500 },
+    rotina_ativa: cfg.rotina_notas !== false,
+  };
+}
+
+/** listar_notas_fiscais (Adulto): notas do mês (ou da competência pedida), resumidas. Dependente não chega aqui. */
+function acaoListarNotasFiscais(p, ctx) {
+  const comp = p.competencia || competenciaDe();
+  let notas = lerAba('NotasFiscais').filter(function (n) { return String(n.data_emissao || '').slice(0, 7) === comp; });
+  if (p.usuario_id_filtro) notas = notas.filter(function (n) { return n.usuario_id === p.usuario_id_filtro; });
+  if (p.destino) notas = notas.filter(function (n) { return n.destino === p.destino; });
+  return notas.sort(function (a, b) { return a.data_emissao < b.data_emissao ? 1 : -1; }).slice(0, Number(p.limite) || 200).map(notaFiscalResumo);
+}
+
+/** salvar_credencial_fiscal (Admin): grava a credencial (somente escrita) para um usuário/fonte. */
+function acaoSalvarCredencialFiscal(p, ctx) {
+  const fonte = String(p.fonte || 'nota_parana');
+  const uid = String(p.usuario_id_alvo || p.usuario_alvo || ctx.uid);
+  const u = buscarPorId('Usuarios', uid);
+  if (!u || normalizarPerfil(u.perfil) === 'Dependente') throw new ErroUsuario('Escolha um membro adulto.');
+  const cred = prepararCredencialFiscal(fonte, p.credencial || p);
+  gravarCredencialFiscal(fonte, uid, cred);
+  atualizarEstadoNotas(fonte, uid, { conectado_em: agoraIso(), falhas: 0, suspenso: false, motivo: '' });
+  return { ok: true, fonte: fonte, usuario_id: uid, conectado_em: agoraIso() };
+}
+
+/** remover_credencial_fiscal (Admin): apaga a propriedade. */
+function acaoRemoverCredencialFiscal(p, ctx) {
+  const fonte = String(p.fonte || 'nota_parana');
+  const uid = String(p.usuario_id_alvo || p.usuario_alvo || ctx.uid);
+  apagarCredencialFiscal(fonte, uid);
+  return { ok: true, fonte: fonte, usuario_id: uid };
+}
+
+/** testar_credencial_fiscal (Admin): login + leitura do resumo do mês. Devolve só o resultado classificado. */
+function acaoTestarCredencialFiscal(p, ctx) {
+  const fonte = String(p.fonte || 'nota_parana');
+  const uid = String(p.usuario_id_alvo || p.usuario_alvo || ctx.uid);
+  const cred = lerCredencialFiscal(FONTES_NOTAS[fonte].prefixo, uid);
+  if (!cred) throw new ErroUsuario('Este membro ainda não está conectado ao ' + FONTES_NOTAS[fonte].nome + '.');
+  const hoje = new Date();
+  if (fonte === 'nota_parana') {
+    const login = loginNotaParana(cred);
+    if (!login.ok) { registrarFalhaLogin(fonte, uid, login.motivo); return { ok: false, etapa: login.etapa, motivo: login.motivo, dica: dicaFase0(login.motivo), caminho: login.saltos }; }
+    const lista = listarNotasMesNotaParana(login.pote, hoje.getFullYear(), hoje.getMonth() + 1);
+    atualizarEstadoNotas(fonte, uid, { falhas: 0, suspenso: false, motivo: '', ultimo_ok: agoraIso() });
+    return { ok: lista.classe === 'ok', motivo: lista.classe, quantidade: lista.quantidade, competencia: competenciaDe(), texto: lista.classe === 'ok' ? 'login ok · ' + lista.quantidade + ' notas em ' + zeros(hoje.getMonth() + 1, 2) + '/' + hoje.getFullYear() : 'login ok, mas a lista voltou "' + lista.classe + '"' };
+  }
+  const login = loginNotaCuritibana(cred);
+  if (!login.ok) { registrarFalhaLogin(fonte, uid, login.motivo); return { ok: false, etapa: login.etapa, motivo: login.motivo, dica: dicaFase0(login.motivo), caminho: login.saltos }; }
+  const meses = lerMesesNotaCuritibana(login.pote, 1);
+  atualizarEstadoNotas(fonte, uid, { falhas: 0, suspenso: false, motivo: '', ultimo_ok: agoraIso() });
+  return { ok: meses.ok, motivo: meses.ok ? 'ok' : 'lista', quantidade: meses.notas.length, competencia: competenciaDe(), texto: meses.ok ? 'login ok · ' + meses.notas.length + ' notas no último mês disponível' : 'login ok, mas não li a lista de meses' };
+}
+
+/** sincronizar_notas (Adulto): roda agora para o próprio usuário; o Admin pode rodar para todos. */
+function acaoSincronizarNotas(p, ctx) {
+  const todos = ctx.ehAdmin && paraBooleano(p.todos);
+  const resultados = sincronizarNotasFiscais({ usuario_id: todos ? '' : ctx.uid, fonte: p.fonte || '', forcar: true, silencioso: !paraBooleano(p.notificar) });
+  return resultados.map(function (r) { return { fonte: r.fonte, usuario_id: r.usuario_id, ok: r.ok, motivo: r.motivo, novas: r.novas || 0, lancadas: r.lancadas || 0, caixa: (r.caixa || 0) + (r.anexadas || 0), a_confirmar: r.a_confirmar || 0, enriquecidas: r.enriquecidas || 0, canceladas: r.canceladas || 0, restantes: r.restantes || 0, resumo: r.ok ? (resumoSincronizacao(r.itens || []) || 'Nenhuma nota nova.') : r.motivo }; });
+}
+
+/** buscar_nota_fiscal (Adulto): busca por loja/data/valor — usada pelo Assistente e pela voz. */
+function acaoBuscarNotaFiscal(p, ctx) {
+  const data = p.data ? normalizarDataIso(p.data) : '';
+  return buscarNotaFiscalParaUsuario(ctx, p.loja, data, lerValor(p.valor), p.sincronizar !== false && p.sincronizar !== 'false');
+}
+
+/**
+ * definir_destino_nota (Adulto): familia (lança, com categoria opcional) · empresa · ignorar; aprende para o CNPJ.
+ * Devolve { nota, item } (item da Caixa atualizado, quando houver).
+ */
+function acaoDefinirDestinoNota(p, ctx) {
+  const destino = String(p.destino || '');
+  if (['familia', 'empresa', 'ignorar'].indexOf(destino) < 0) throw new ErroUsuario('Destino inválido (familia, empresa ou ignorar).');
+  let nota = p.nota_id ? buscarPorId('NotasFiscais', String(p.nota_id)) : null;
+  if (!nota && p.caixa_id) nota = lerAba('NotasFiscais').find(function (n) { return n.caixa_id === String(p.caixa_id); }) || null;
+  if (!nota) throw new ErroUsuario('Nota não encontrada.');
+  if (ctx.ehDependente && nota.usuario_id !== ctx.uid) throw new ErroUsuario('Sem permissão');
+  try { aprenderDestinoNota(nota, destino, ctx.uid); } catch (e) { console.warn('Não gravei o destino da loja: ' + e.message); }
+  let item = nota.caixa_id ? buscarPorId('CaixaEntrada', nota.caixa_id) : null;
+  if (destino === 'familia') {
+    const d = carregarDados();
+    let itens = [];
+    try { itens = nota.itens ? JSON.parse(nota.itens) : []; } catch (e) { itens = []; }
+    const sugestoes = aplicarRegraLoja(nota.emitente, sugerirCategoria(nota.emitente + ' ' + textoDosItens(itens, 10), d.categorias), d.regras_loja);
+    const categoriaId = String(p.categoria_id || (item && item.sugestao_categoria) || sugestoes[0] || 'c_imprevistos');
+    if (!buscarPorId('Categorias', categoriaId)) throw new ErroUsuario('Categoria não encontrada.');
+    if (nota.lancamento_id) {
+      atualizarPorId('NotasFiscais', nota.id, { destino: 'familia', atualizada_em: agoraIso() });
+      if (item) item = atualizarPorId('CaixaEntrada', item.id, { status: 'lançado', lancamento_id: nota.lancamento_id });
+    } else {
+      const data = String(nota.data_emissao || hojeIso()).slice(0, 10);
+      const l = acaoSalvarLancamento({ lancamento: { valor: nota.valor, data: data, categoria_id: categoriaId, descricao: p.descricao || nota.emitente, estabelecimento: nota.emitente, forma_pgto: formaPgtoDaNota(nota.forma_pgto), origem: nota.fonte, usuario_id: nota.usuario_id || ctx.uid }, aprender_loja: item && item.sugestao_categoria && item.sugestao_categoria !== categoriaId }, ctx)[0];
+      nota = atualizarPorId('NotasFiscais', nota.id, { destino: 'familia', lancamento_id: l.id, atualizada_em: agoraIso() });
+      if (item) item = atualizarPorId('CaixaEntrada', item.id, { status: 'lançado', lancamento_id: l.id });
+    }
+  } else {
+    if (nota.lancamento_id) {
+      // Já estava lançada como da família e agora é empresa/ignorar: tira do painel da casa (soft delete).
+      try { atualizarPorId('Lancamentos', nota.lancamento_id, { excluido: true, editado_por: ctx.uid }); } catch (e) { /* ignora */ }
+    }
+    nota = atualizarPorId('NotasFiscais', nota.id, { destino: destino, atualizada_em: agoraIso() });
+    if (item) item = atualizarPorId('CaixaEntrada', item.id, { status: 'ignorado' });
+  }
+  nota = buscarPorId('NotasFiscais', nota.id) || nota;
+  return { nota: notaFiscalResumo(nota), item: item ? itemCaixaPublico(item, nota) : null };
+}
+
+/** importar_historico_notas (Admin): importa até 12 meses, em lotes (um mês por chamada, do mais recente para trás). */
+function acaoImportarHistoricoNotas(p, ctx) {
+  const uid = String(p.usuario_id_alvo || p.usuario_alvo || ctx.uid);
+  const fonte = String(p.fonte || 'nota_parana');
+  const mesesAtras = Math.min(12, Math.max(1, Number(p.meses_atras) || 3));
+  const comp = somarMeses(competenciaDe(), -mesesAtras);
+  const janela = [{ ano: Number(comp.slice(0, 4)), mes: Number(comp.slice(5, 7)), competencia: comp }];
+  const r = sincronizarFonteUsuario(fonte, uid, { meses: janela, maxDetalhes: Number(p.max_detalhes) || NOTAS_MAX_DETALHES_POR_EXECUCAO, forcar: true });
+  return { competencia: comp, ok: r.ok, motivo: r.motivo, novas: r.novas || 0, restantes: r.restantes || 0, proximo_meses_atras: r.restantes ? mesesAtras : mesesAtras + 1, concluido: !r.restantes && mesesAtras >= 12, resumo: r.ok ? (resumoSincronizacao(r.itens || []) || 'Nenhuma nota nova em ' + nomeCompetencia(comp) + '.') : r.motivo };
+}
+
+// ---------- Webhook do Plano B: ?webhook=notas ----------
+
+/**
+ * Recebe notas de um coletor externo (GitHub Actions + Playwright, ou um computador no Brasil):
+ * POST { token_familia, token, notas: [{ fonte, chave_acesso, id_portal, tp_doc, cnpj, emitente, data_emissao, valor,
+ * frete, desconto, forma_pgto, itens, situacao }] }. Concilia cada nota como a sincronização faria.
+ */
+function tratarWebhookNotas(p) {
+  validarTokenFamilia(p.token_familia);
+  const usuario = usuarioPorToken(String(p.token || ''));
+  if (!usuario || !usuario.ativo) throw new ErroUsuario('Sessão expirada');
+  if (normalizarPerfil(usuario.perfil) === 'Dependente') throw new ErroUsuario('Sem permissão');
+  let notas = p.notas;
+  if (typeof notas === 'string') { try { notas = JSON.parse(notas); } catch (e) { throw new ErroUsuario('O campo notas não é um JSON válido.'); } }
+  if (!Array.isArray(notas)) throw new ErroUsuario('Envie uma lista em notas.');
+  const d = carregarDados();
+  d.caixa_entrada = lerAba('CaixaEntrada');
+  d.notas_fiscais = lerAba('NotasFiscais');
+  const itens = [];
+  notas.slice(0, 100).forEach(function (n) {
+    const fonte = FONTES_NOTAS[n.fonte] ? n.fonte : 'nota_parana';
+    const lida = { fonte: fonte, id_portal: String(n.id_portal || n.chave_acesso || ''), tp_doc: String(n.tp_doc || (fonte === 'nota_curitibana' ? 'nfse' : '2')), cnpj: cnpjSoDigitos(n.cnpj), emitente: String(n.emitente || ''), data_emissao: String(n.data_emissao || ''), valor: lerValor(n.valor), situacao: situacaoNota(n.situacao || 'normal'), chave_acesso: String(n.chave_acesso || '').replace(/\D/g, '') };
+    if (!lida.id_portal) return;
+    const detalhe = { chave_acesso: lida.chave_acesso, cnpj: lida.cnpj, emitente: lida.emitente, data_emissao: lida.data_emissao, valor: lida.valor, frete: lerValor(n.frete), desconto: lerValor(n.desconto), forma_pgto: String(n.forma_pgto || ''), itens: Array.isArray(n.itens) ? n.itens.map(function (i) { return itemNota(i.d || i.descricao, i.c || i.codigo, lerValor(i.q || i.qtde), i.un || i.unidade, lerValor(i.vu || i.valor_unitario), lerValor(i.vt || i.valor_total)); }) : [] };
+    const r = processarNota(lida, detalhe, usuario.id, d, {});
+    itens.push({ acao: r.acao, emitente: r.nota.emitente, valor: r.nota.valor });
+  });
+  atualizarEstadoNotas('nota_parana', usuario.id, { ultima_leitura: agoraIso(), ultimo_ok: agoraIso(), notas_novas: itens.filter(function (i) { return i.acao !== 'atualizada' && i.acao !== 'cancelada'; }).length, motivo: 'webhook' });
+  const resumo = resumoSincronizacao(itens);
+  if (resumo) { try { notificarUsuario(usuario.id, 'Notas fiscais: ' + resumo.split(' · ')[0], resumo, '#/caixa'); } catch (e) { /* ignora */ } }
+  return { recebidas: notas.length, processadas: itens.length, resumo: resumo };
 }
 
 // ==============================================================================
@@ -5327,11 +7000,19 @@ function compraJaExiste(compra, lancamentos, itensCaixa, finalCartao, cartaoId) 
   return (itensCaixa || []).some((c) => c.status !== 'ignorado' && (c.hash_dedup === hash || (mesmoValorEData(c.valor, c.data_compra) && (!finalCartao || c.final_cartao === finalCartao))));
 }
 
+/** Canal da Caixa de Entrada → origem do lançamento (função pura). */
+function origemDoCanal(canal) {
+  if (canal === 'email' || canal === 'fatura' || canal === 'nota_parana' || canal === 'nota_curitibana') return canal;
+  return 'sms';
+}
+
 // =====================================================================
 // PARTE 2 — WEBHOOK, CAIXA DE ENTRADA, FATURAS E CARTÕES (tocam a planilha)
 // =====================================================================
 
-const CANAIS_VALIDOS = ['sms_ios', 'sms_android', 'email', 'fatura'];
+const CANAIS_VALIDOS = ['sms_ios', 'sms_android', 'email', 'fatura', 'nota_parana', 'nota_curitibana'];
+/** Canais que vêm do robô de notas fiscais (o item da Caixa carrega os botões Família / Empresa / Ignorar). */
+const CANAIS_NOTA = ['nota_parana', 'nota_curitibana'];
 
 /**
  * Webhook `?webhook=1` (GET ou POST). Devolve { status: 'pendente'|'duplicado'|'ignorado', item }.
@@ -5374,10 +7055,11 @@ function registrarAlertaNaCaixa(texto, canal, usuario) {
 }
 
 /** Item da caixa de entrada para o app (sem hash interno). */
-function itemCaixaPublico(c) {
+function itemCaixaPublico(c, nota) {
   const o = Object.assign({}, c);
   delete o.hash_dedup;
   o.sugestoes = Array.isArray(o.sugestoes) ? o.sugestoes : String(o.sugestoes || '').split(';').filter(Boolean);
+  if (nota) o.nota = notaFiscalResumo(nota);
   return o;
 }
 
@@ -5386,7 +7068,8 @@ function acaoListarCaixaEntrada(p, ctx) {
   let itens = lerAba('CaixaEntrada');
   if (ctx.ehDependente) itens = itens.filter((c) => c.usuario_id === ctx.uid);
   if (p.status) itens = itens.filter((c) => c.status === p.status);
-  return itens.slice().sort((a, b) => (a.recebido_em < b.recebido_em ? 1 : -1)).map(itemCaixaPublico);
+  const notasPorCaixa = indexarNotasPorCaixa(lerAba('NotasFiscais'));
+  return itens.slice().sort((a, b) => (a.recebido_em < b.recebido_em ? 1 : -1)).map((c) => itemCaixaPublico(c, notasPorCaixa[c.id]));
 }
 
 /**
@@ -5398,7 +7081,13 @@ function acaoResolverCaixaEntrada(p, ctx) {
   if (!c) throw new ErroUsuario('Item não encontrado');
   if (ctx.ehDependente && c.usuario_id !== ctx.uid) throw new ErroUsuario('Sem permissão');
   if (c.status === 'lançado') throw new ErroUsuario('Este item já foi lançado.');
+  // Item do robô de notas fiscais: a decisão Família / Empresa / Ignorar passa por definir_destino_nota (aprende o CNPJ).
+  const nota = CANAIS_NOTA.indexOf(c.canal) >= 0 ? lerAba('NotasFiscais').find((n) => n.caixa_id === c.id) : null;
+  if (nota && (p.acao_caixa === 'ignorar' || p.destino)) {
+    return acaoDefinirDestinoNota({ nota_id: nota.id, destino: p.acao_caixa === 'ignorar' ? 'ignorar' : p.destino, categoria_id: p.categoria_id, descricao: p.descricao }, ctx).item;
+  }
   if (p.acao_caixa === 'ignorar') return itemCaixaPublico(atualizarPorId('CaixaEntrada', c.id, { status: 'ignorado' }));
+  if (c.status === 'aguardando_nota' && !(c.valor > 0)) throw new ErroUsuario('Esta compra ainda espera a nota fiscal: informe o valor para lançar agora.');
 
   const cartao = lerAba('Cartoes').find((k) => apenasFinalCartao(k.final) === c.final_cartao);
   const categoriaId = p.categoria_id || c.sugestao_categoria || 'c_imprevistos';
@@ -5411,14 +7100,17 @@ function acaoResolverCaixaEntrada(p, ctx) {
     try { aprenderLoja(c.estabelecimento, categoriaId, ctx.uid); } catch (e) { console.warn('Não gravei a regra da loja: ' + e.message); }
   }
   const data = c.data_compra || hojeIso();
+  const valor = p.valor > 0 ? lerValor(p.valor) : c.valor;
   const l = inserirLinhas('Lancamentos', [{
-    id: gerarId('l'), data, competencia: competenciaDe(data), tipo: 'despesa', valor: c.valor, categoria_id: categoriaId,
-    descricao: p.descricao || c.estabelecimento, estabelecimento: c.estabelecimento, forma_pgto: 'crédito', cartao_id: cartao ? cartao.id : '',
-    parcela: '', usuario_id: c.usuario_id || ctx.uid, origem: c.canal === 'email' ? 'email' : c.canal === 'fatura' ? 'fatura' : 'sms',
-    anexo_url: '', status: 'confirmado', hash_dedup: hashDedup(c.valor, data, c.final_cartao, c.estabelecimento),
+    id: gerarId('l'), data, competencia: competenciaDe(data), tipo: 'despesa', valor, categoria_id: categoriaId,
+    descricao: p.descricao || c.estabelecimento, estabelecimento: c.estabelecimento,
+    forma_pgto: nota ? formaPgtoDaNota(nota.forma_pgto) : 'crédito', cartao_id: cartao ? cartao.id : '',
+    parcela: '', usuario_id: c.usuario_id || ctx.uid, origem: origemDoCanal(c.canal),
+    anexo_url: '', status: 'confirmado', hash_dedup: hashDedup(valor, data, c.final_cartao, c.estabelecimento),
     criado_em: agoraIso(), editado_por: '', excluido: false, projeto_id: '',
   }])[0];
-  return itemCaixaPublico(atualizarPorId('CaixaEntrada', c.id, { status: 'lançado', lancamento_id: l.id }));
+  if (nota) atualizarPorId('NotasFiscais', nota.id, { lancamento_id: l.id, destino: 'familia', atualizada_em: agoraIso() });
+  return itemCaixaPublico(atualizarPorId('CaixaEntrada', c.id, { status: 'lançado', lancamento_id: l.id, valor }), nota);
 }
 
 /**

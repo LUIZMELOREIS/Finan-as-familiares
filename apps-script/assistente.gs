@@ -73,6 +73,8 @@ function ferramentasAssistente() {
       input_schema: { type: 'object', properties: { valor: { type: 'number' }, categoria_id: { type: 'string' }, descricao: { type: 'string' }, estabelecimento: { type: 'string' }, forma_pgto: { type: 'string', enum: ['dinheiro', 'pix', 'débito', 'crédito', 'boleto'] }, data: { type: 'string', description: 'AAAA-MM-DD (padrão hoje)' } }, required: ['valor', 'categoria_id'] } },
     { name: 'proximas_saidas', description: 'Contas, parcelas, assinaturas e faturas previstas para os próximos 30, 60 ou 90 dias.',
       input_schema: { type: 'object', properties: { dias: { type: 'integer', enum: [30, 60, 90] } } } },
+    { name: 'buscar_nota_fiscal', description: 'Procura a nota fiscal (Nota Paraná / Nota Curitibana) de uma compra que a pessoa diz ter feito numa loja ("comprei no Condor") e lança a compra com o valor real da nota. Use quando a pessoa cita a loja sem dizer o valor. Se a nota ainda não apareceu, deixa a compra em espera na Caixa de entrada.',
+      input_schema: { type: 'object', properties: { loja: { type: 'string', description: 'nome da loja como a pessoa falou' }, data: { type: 'string', description: 'AAAA-MM-DD, se a pessoa disse quando' }, valor: { type: 'number', description: 'valor aproximado, se a pessoa disse' } }, required: ['loja'] } },
   ];
 }
 
@@ -118,6 +120,11 @@ function executarFerramentaAssistente(nome, entrada, ctx, estado) {
   }
   if (nome === 'proximas_saidas') {
     return { saidas: calcularProximasSaidas(d, [30, 60, 90].indexOf(Number(e.dias)) >= 0 ? Number(e.dias) : 30).map((s) => ({ data: s.data, titulo: s.titulo, valor: s.valor, status: s.status })) };
+  }
+  if (nome === 'buscar_nota_fiscal') {
+    const r = buscarNotaFiscalParaUsuario(ctx, e.loja, e.data ? normalizarDataIso(e.data) : '', lerValor(e.valor), true);
+    if (estado && r.lancamento && r.status === 'lancado') estado.lancamento = r.lancamento;
+    return { status: r.status, texto: r.texto, lancamento: r.lancamento ? { id: r.lancamento.id, valor: r.lancamento.valor, categoria_id: r.lancamento.categoria_id, data: r.lancamento.data } : undefined, notas: r.notas };
   }
   return { erro: 'Ferramenta desconhecida: ' + nome };
 }
@@ -257,6 +264,12 @@ function responderLocal(d, visao, uid, texto, hoje) {
   const media3 = (cid) => mediaCategoria3m(despesas, cid, comp);
   const categoriasVisiveisLocal = d.categorias.filter((c) => c.ativa && !c.oculta_cardapio && (!c.sensivel || !visao || visao.ver_sensivel !== false));
 
+  // 0. "Comprei no Condor" sem valor → procurar a nota fiscal (robô de notas, seção 8).
+  if (/^(?:EU\s+)?COMPREI\b/.test(t)) {
+    const loja = lojaDeFraseSemValor(texto);
+    if (loja) return { texto: 'Vou procurar a nota de ' + loja + '.', buscar_nota: loja };
+  }
+
   // 1. Lançamento por texto.
   if (/^(GASTEI|PAGUEI|COMPREI|LANCA|LANCE|LANCAR|REGISTRA|REGISTRE|RECEBI|GANHEI)\b/.test(t) || /\bREAIS?\b|R\$/.test(t)) {
     const e = extrairDeTexto(texto, categoriasVisiveisLocal);
@@ -360,10 +373,13 @@ function responderAssistente(ctx, mensagem, historico, imagem, origem) {
     const d = carregarDados();
     const r = responderLocal(d, visaoDe(ctx), ctx.uid, texto);
     let lanc;
-    if (r.lancamento) {
+    if (r.buscar_nota) {
+      const b = buscarNotaFiscalParaUsuario(ctx, r.buscar_nota, '', 0, true);
+      resposta = mensagemAssistente(b.texto, { lancamento: b.lancamento && b.status === 'lancado' ? lancamentoPublico(b.lancamento) : undefined, etiqueta: b.status === 'lancado' && b.lancamento ? 'lançado' : b.status === 'aguardando' ? 'aguardando nota' : undefined });
+    } else if (r.lancamento) {
       lanc = acaoSalvarLancamento({ lancamento: Object.assign({}, r.lancamento, { origem: origem || 'chat' }) }, ctx)[0];
     }
-    resposta = mensagemAssistente(r.texto, { barras: r.barras, lancamento: lanc, etiqueta: lanc ? 'lançado' : undefined });
+    if (!resposta) resposta = mensagemAssistente(r.texto, { barras: r.barras, lancamento: lanc, etiqueta: lanc ? 'lançado' : undefined });
   }
   gravarConversa(ctx.uid, [{ id: gerarId('m'), papel: 'eu', texto: texto || '(foto)', data: agoraIso() }, resposta]);
   return resposta;
