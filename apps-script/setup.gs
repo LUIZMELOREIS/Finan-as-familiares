@@ -15,6 +15,8 @@
  *  - TOKEN_TELEGRAM: token do bot (opcional; ver telegram.gs).
  *  - URL_SERVICO_PUSH / TOKEN_SERVICO_PUSH: notificações push (opcional).
  *  - EMAILS_ADMIN: e-mails dos administradores para os resumos (opcional).
+ *  - NOTAPR_<usuario_id> / NOTACWB_<usuario_id>: credenciais do robô de notas fiscais (gravadas pelo app em
+ *    Configurações → Notas fiscais; só escrita, nunca devolvidas). Ver docs/ROBO_NOTAS_FISCAIS.md.
  *  - ID_PASTA / ID_PLANILHA: gravadas automaticamente por instalar() (ID_PASTA pode ser definida antes para escolher a pasta).
  */
 
@@ -326,7 +328,7 @@ const GATILHOS = [
 ];
 
 /** Gatilhos das rotinas que a família liga/desliga em Configurações. */
-const FUNCOES_ROTINAS = ['vigiaDiario', 'lembreteDiario', 'analiseQuinzenal', 'fechamentoDoMes'];
+const FUNCOES_ROTINAS = ['vigiaDiario', 'lembreteDiario', 'analiseQuinzenal', 'fechamentoDoMes', 'sincronizarNotasFiscais'];
 
 /** Remove todos os gatilhos deste projeto. */
 function desinstalar_gatilhos() {
@@ -358,7 +360,8 @@ function horaDe(horario, padrao) {
  *  - rotina_vigia ligada → vigiaDiario na hora do lembrete (padrão 20h), que inclui o lembrete diário;
  *    desligada → só lembreteDiario nessa hora;
  *  - rotina_quinzenal → analiseQuinzenal nos dias 1 e 16 às 7h;
- *  - rotina_fechamento → fechamentoDoMes no dia 1º às 6h.
+ *  - rotina_fechamento → fechamentoDoMes no dia 1º às 6h;
+ *  - rotina_notas → sincronizarNotasFiscais a cada 6 horas e uma passada fixa às 21h (robô de notas fiscais).
  */
 function instalarGatilhosRotinas(cfg) {
   const c = cfg || lerConfig();
@@ -370,6 +373,10 @@ function instalarGatilhosRotinas(cfg) {
     ScriptApp.newTrigger('analiseQuinzenal').timeBased().onMonthDay(16).atHour(7).create();
   }
   if (c.rotina_fechamento !== false) ScriptApp.newTrigger('fechamentoDoMes').timeBased().onMonthDay(1).atHour(6).create();
+  if (c.rotina_notas !== false) {
+    ScriptApp.newTrigger('sincronizarNotasFiscais').timeBased().everyHours(6).create();
+    ScriptApp.newTrigger('sincronizarNotasFiscais').timeBased().everyDays(1).atHour(21).create();
+  }
 }
 
 /** Compatibilidade com a v1: reinstala as rotinas com um novo horário de lembrete. */

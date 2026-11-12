@@ -10,9 +10,11 @@ import type {
   Alerta, Aporte, Aviso, Bootstrap, Cartao, Categoria, Config, ContaAPagar, ContaFixa, DadosPainel, Decisao, Grupo,
   ItemCaixaEntrada, Lancamento, LeituraExtraida, MensagemAssistente, Orcamento, Patrimonio, Projeto, RegraLoja, Reuniao,
   RespostaApi, ResumoMes, SaidaPrevista, Tipo, Usuario, Versiculo, VotoRegistro, FormaPgto,
+  BuscaNotaFiscal, ConexaoNotas, DestinoNota, FonteNota, NotaFiscalResumo, ResultadoSincronizacao, StatusNotasFiscais,
 } from '../tipos'
 import { agoraIso, competenciaDe, gerarId, hashDedup, hojeIso, moeda, nomeCompetencia, normalizar, somarMeses, MESES } from '../util/formato'
 import { extrairDeTexto, sugerirCategoria } from '../util/extrator'
+import { lojaDeFraseSemValor } from '../util/notas'
 
 interface Banco {
   config: Config
@@ -36,10 +38,13 @@ interface Banco {
   avisos: Aviso[]
   patrimonio: Patrimonio[]
   conversas: MensagemAssistente[]
+  notas_fiscais: NotaFiscalResumo[]
+  /** `${fonte}:${usuario_id}` → conectado (a demo nunca guarda senha). */
+  conexoes_notas: Record<string, { conectado_em: string; ultimo_ok: string }>
   log: Array<{ data: string; usuario_id: string; acao: string; detalhe: string }>
 }
 
-const CHAVE = 'ff_mock_banco_v2b'
+const CHAVE = 'ff_mock_banco_v2c'
 let cache: Banco | null = null
 
 // ---------- Gerador de dados de exemplo (12 meses) ----------
@@ -244,6 +249,15 @@ export function gerarBancoExemplo(): Banco {
     { id: 'ce_4', recebido_em: agoraIso(), canal: 'sms_ios', texto_bruto: 'Compra aprovada no seu Itaú final 4821: R$ 44,90 em DISNEY PLUS em 13/10.', valor: 44.9, estabelecimento: 'DISNEY PLUS', final_cartao: '4821', data_compra: somarMeses(compAtual, 0) + '-13', sugestao_categoria: 'c_streaming', sugestoes: ['c_streaming', 'c_apps', 'c_hobbies', 'c_passeios'], usuario_id: 'u_luiz', status: 'pendente' },
   ]
 
+  // Robô de notas fiscais (demo): três notas do Nota Paraná de exemplo — uma já lançada direto, uma
+  // de loja nova esperando "Família ou Empresa?" na Caixa, uma marcada como da empresa.
+  const notas_fiscais: NotaFiscalResumo[] = [
+    { id: 'nf_1', fonte: 'nota_parana', tp_doc: '0', chave_final: '00112233', cnpj: '76189406000181', emitente: 'CONDOR SUPER CENTER LTDA', data_emissao: `${hoje}T18:42`, valor: 312.8, desconto: 0, frete: 0, forma_pgto: 'Cartão de Crédito', qtd_itens: 4, itens: [{ d: 'ARROZ TIO JOAO 5KG', q: 1, vu: 28.9, vt: 28.9 }, { d: 'CARNE BOVINA ALCATRA KG', q: 1.42, un: 'KG', vu: 54.9, vt: 77.96 }, { d: 'LEITE INTEGRAL 1L', q: 12, vu: 4.99, vt: 59.88 }, { d: 'FRUTAS E VERDURAS', q: 1, vu: 146.06, vt: 146.06 }], situacao: 'normal', destino: 'familia', usuario_id: 'u_luiz', lancamento_id: '', caixa_id: '' },
+    { id: 'nf_2', fonte: 'nota_parana', tp_doc: '0', chave_final: '55667788', cnpj: '03742330000121', emitente: 'LEROY MERLIN CIA BRASILEIRA DE BRICOLAGEM', data_emissao: `${hoje}T11:05`, valor: 486.5, desconto: 0, frete: 0, forma_pgto: 'Cartão de Débito', qtd_itens: 3, itens: [{ d: 'TINTA ACRILICA 18L', q: 1, vu: 289.9, vt: 289.9 }, { d: 'ROLO DE LA 23CM', q: 2, vu: 24.9, vt: 49.8 }, { d: 'FITA CREPE 48MM', q: 6, vu: 24.47, vt: 146.8 }], situacao: 'normal', destino: 'a_confirmar', usuario_id: 'u_luiz', lancamento_id: '', caixa_id: 'ce_5' },
+    { id: 'nf_3', fonte: 'nota_parana', tp_doc: '1', chave_final: '99001122', cnpj: '61186888000193', emitente: 'KALUNGA COMERCIO E INDUSTRIA GRAFICA', data_emissao: `${somarMeses(compAtual, 0)}-05T15:20`, valor: 1289.9, desconto: 0, frete: 0, forma_pgto: 'Boleto', qtd_itens: 2, itens: [{ d: 'CADEIRA ESCRITORIO PRESIDENTE', q: 1, vu: 1099.9, vt: 1099.9 }, { d: 'PAPEL A4 500 FOLHAS', q: 10, vu: 19, vt: 190 }], situacao: 'normal', destino: 'empresa', usuario_id: 'u_luiz', lancamento_id: '', caixa_id: '' },
+  ]
+  caixa_entrada.push({ id: 'ce_5', recebido_em: agoraIso(), canal: 'nota_parana', texto_bruto: 'Nota fiscal com CPF: LEROY MERLIN — loja nova, Família ou Empresa?', valor: 486.5, estabelecimento: 'LEROY MERLIN', final_cartao: '', data_compra: hoje, sugestao_categoria: 'c_manutencao_casa', sugestoes: ['c_manutencao_casa', 'c_moveis', 'c_imprevistos'], usuario_id: 'u_luiz', status: 'pendente', nota: notas_fiscais[1] })
+
   const alertas: Alerta[] = [
     { id: 'al_1', nome: 'Delivery acima de R$ 400/mês', tipo: 'categoria_acima', categoria_id: 'c_delivery', limite: 400, avisar: ['u_luiz', 'u_nina'], ativo: true },
     { id: 'al_2', nome: 'Supermercado acima de R$ 2.000/mês', tipo: 'categoria_acima', categoria_id: 'c_mercado', limite: 2000, avisar: [], ativo: true },
@@ -263,10 +277,11 @@ export function gerarBancoExemplo(): Banco {
     lembrete_horario: '20:00', fe_ativa: true, divisao_dar: 10, divisao_poupar: 15, divisao_viver: 75,
     valor_gasto_grande: 1000, regra_votacao: 'maioria_mais_pais', dependente_ve_salarios: false,
     rotina_vigia: true, rotina_quinzenal: true, rotina_fechamento: true, telegram_ativo: false,
+    rotina_notas: true, notas_limite_direto: 500, notas_limite_grande: 1500,
     url_planilha: 'https://docs.google.com/spreadsheets/', url_pasta_drive: 'https://drive.google.com/',
   }
 
-  return { config, usuarios, tipos, grupos, categorias, regras_loja: [], lancamentos, contas_fixas, contas_a_pagar, cartoes, caixa_entrada, orcamento, projetos, aportes, decisoes, votos, reunioes: [], alertas, avisos: [], patrimonio, conversas: [], log: [] }
+  return { config, usuarios, tipos, grupos, categorias, regras_loja: [], lancamentos, contas_fixas, contas_a_pagar, cartoes, caixa_entrada, orcamento, projetos, aportes, decisoes, votos, reunioes: [], alertas, avisos: [], patrimonio, conversas: [], notas_fiscais, conexoes_notas: { 'nota_parana:u_luiz': { conectado_em: agoraIso(), ultimo_ok: agoraIso() } }, log: [] }
 }
 
 // ---------- Persistência ----------
@@ -275,11 +290,22 @@ async function carregar(): Promise<Banco> {
   if (cache) return cache
   const salvo = await get<Banco>(CHAVE).catch(() => null)
   cache = salvo && salvo.tipos ? salvo : gerarBancoExemplo()
+  garantirNotasDemo(cache)
   if (!salvo) await persistir()
   return cache
 }
+/** Garante que a nota nf_1 da demo esteja lançada (loja conhecida → lançamento direto). */
+function garantirNotasDemo(b: Banco) {
+  if (!b.notas_fiscais) { b.notas_fiscais = []; b.conexoes_notas = {} }
+  const n = b.notas_fiscais.find((x) => x.id === 'nf_1')
+  if (n && !n.lancamento_id) {
+    const l: Lancamento = { id: gerarId('l'), data: n.data_emissao.slice(0, 10), competencia: competenciaDe(n.data_emissao.slice(0, 10)), tipo: 'despesa', valor: n.valor, categoria_id: 'c_mercado', descricao: 'Condor', estabelecimento: 'Condor', forma_pgto: 'crédito', usuario_id: n.usuario_id, origem: 'nota_parana', status: 'confirmado', criado_em: agoraIso() }
+    b.lancamentos.push(l); n.lancamento_id = l.id
+  }
+}
+
 async function persistir() { if (cache) await set(CHAVE, cache).catch(() => {}) }
-export async function reiniciarDemo() { cache = gerarBancoExemplo(); await persistir() }
+export async function reiniciarDemo() { cache = gerarBancoExemplo(); garantirNotasDemo(cache); await persistir() }
 
 // ---------- Helpers ----------
 
@@ -539,6 +565,11 @@ function responderAssistente(b: Banco, uid: string, texto: string): MensagemAssi
   const resp = (texto: string, extra: Partial<MensagemAssistente> = {}): MensagemAssistente => ({ id: gerarId('m'), papel: 'assistente', texto, data: agoraIso(), ...extra })
   const totalCat = (cid: string, c: string) => ls.filter((l) => l.categoria_id === cid && l.competencia === c).reduce((s, l) => s + l.valor, 0)
 
+  // "Comprei no Condor" sem valor → robô de notas fiscais
+  if (/^(?:EU\s+)?COMPREI\b/.test(t) && lojaDeFraseSemValor(texto)) {
+    const r = buscarNotaFiscalDemo(b, uid, lojaDeFraseSemValor(texto))
+    return resp(r.texto, { lancamento: r.lancamento, etiqueta: r.status === 'lancado' ? 'lançado' : r.status === 'aguardando' ? 'aguardando nota' : undefined })
+  }
   // Lançamento por texto
   if (/^(GASTEI|PAGUEI|COMPREI|LANCA|LANCE|RECEBI|GANHEI)\b/.test(t) || /\bREAIS?\b|R\$/.test(t)) {
     const e = extrairDeTexto(texto, b.categorias)
@@ -631,6 +662,76 @@ function gerarPauta(b: Banco, uid: string, comp: string): string {
 }
 
 // ---------- Despachante ----------
+
+// ---------- Robô de notas fiscais (demo) ----------
+
+const FONTES_NOTAS: Record<FonteNota, string> = { nota_parana: 'Nota Paraná', nota_curitibana: 'Nota Curitibana' }
+const chaveConexao = (fonte: FonteNota, uid: string) => `${fonte}:${uid}`
+const quandoNota = (iso: string) => { const d = iso.slice(0, 10); const h = iso.slice(11, 16); return (d === hojeIso() ? 'hoje' : d.split('-').reverse().join('/')) + (h ? ` ${h}` : '') }
+
+function statusNotasDemo(b: Banco): StatusNotasFiscais {
+  const conexoes: ConexaoNotas[] = []
+  for (const u of b.usuarios.filter((x) => x.ativo && x.perfil !== 'Dependente')) {
+    for (const fonte of Object.keys(FONTES_NOTAS) as FonteNota[]) {
+      const c = b.conexoes_notas[chaveConexao(fonte, u.id)]
+      const minhas = b.notas_fiscais.filter((n) => n.fonte === fonte && n.usuario_id === u.id)
+      conexoes.push({ fonte, nome_fonte: FONTES_NOTAS[fonte], usuario_id: u.id, conectado: !!c, conectado_em: c?.conectado_em ?? '', ultima_leitura: c?.ultimo_ok ?? '', ultimo_ok: c?.ultimo_ok ?? '', notas_novas: 0, suspenso: false, motivo: '', falhas: 0, total_notas: minhas.length, restantes: 0 })
+    }
+  }
+  const comp = competenciaDe()
+  const doMes = b.notas_fiscais.filter((n) => n.data_emissao.slice(0, 7) === comp && n.situacao !== 'cancelada')
+  return { conexoes, contagens: { total: b.notas_fiscais.length, mes: doMes.length, valor_mes: doMes.reduce((s, n) => s + n.valor, 0), a_confirmar: b.notas_fiscais.filter((n) => n.destino === 'a_confirmar').length, empresa: b.notas_fiscais.filter((n) => n.destino === 'empresa').length }, limites: { direto: b.config.notas_limite_direto ?? 500, grande: b.config.notas_limite_grande ?? 1500 }, rotina_ativa: b.config.rotina_notas !== false }
+}
+
+/** familia (lança) · empresa · ignorar — e aprende para o CNPJ (RegrasLoja.destino). */
+function definirDestinoDemo(b: Banco, uid: string, nota: NotaFiscalResumo, destino: DestinoNota, categoriaId?: string, descricao?: string) {
+  const item = b.caixa_entrada.find((c) => c.id === nota.caixa_id)
+  if (destino === 'familia') {
+    const catId = categoriaId || item?.sugestao_categoria || sugerirCategoria(nota.emitente, b.categorias)[0] || 'c_imprevistos'
+    if (!nota.lancamento_id) {
+      const l: Lancamento = { id: gerarId('l'), data: nota.data_emissao.slice(0, 10), competencia: competenciaDe(nota.data_emissao.slice(0, 10)), tipo: 'despesa', valor: nota.valor, categoria_id: catId, descricao: descricao || nota.emitente, estabelecimento: nota.emitente, forma_pgto: /cr[eé]dito/i.test(nota.forma_pgto) ? 'crédito' : /d[eé]bito/i.test(nota.forma_pgto) ? 'débito' : /pix/i.test(nota.forma_pgto) ? 'pix' : /boleto/i.test(nota.forma_pgto) ? 'boleto' : 'dinheiro', usuario_id: nota.usuario_id || uid, origem: nota.fonte, status: 'confirmado', criado_em: agoraIso() }
+      b.lancamentos.push(l); nota.lancamento_id = l.id
+    }
+    nota.destino = 'familia'
+    if (item) { item.status = 'lançado'; item.lancamento_id = nota.lancamento_id }
+  } else {
+    if (nota.lancamento_id) { const l = b.lancamentos.find((x) => x.id === nota.lancamento_id); if (l) l.excluido = true }
+    nota.destino = destino
+    if (item) item.status = 'ignorado'
+  }
+  const chave = normalizar(nota.emitente)
+  const r = b.regras_loja.find((x) => x.loja_normalizada === chave)
+  if (r) { r.acertos = (r.acertos || 0) + 1; r.destino = destino === 'ignorar' ? 'ignorar' : destino } else b.regras_loja.push({ id: gerarId('rl'), loja_normalizada: chave, categoria_id: destino === 'familia' ? (categoriaId || item?.sugestao_categoria || '') : '', criado_por: uid, criado_em: agoraIso(), acertos: 1, destino, cnpj: nota.cnpj })
+  if (item) item.nota = { ...nota }
+  return { nota, item: item ? { ...item } : null }
+}
+
+function buscarNotaFiscalDemo(b: Banco, uid: string, loja: string, data?: string, valor?: number): BuscaNotaFiscal {
+  const l = normalizar(loja)
+  const candidatas = b.notas_fiscais.filter((n) => n.usuario_id === uid && n.situacao !== 'cancelada' && (normalizar(n.emitente).includes(l) || l.split(' ').some((p) => p.length >= 4 && normalizar(n.emitente).includes(p))) && (!data || n.data_emissao.slice(0, 10) === data) && (!valor || Math.abs(n.valor - valor) < 0.01))
+  const abertas = candidatas.filter((n) => !n.lancamento_id)
+  if (abertas.length === 1 || (abertas.length === 0 && candidatas.length === 1)) {
+    const n = abertas[0] ?? candidatas[0]
+    if (n.lancamento_id) {
+      const lanc = b.lancamentos.find((x) => x.id === n.lancamento_id)
+      const cat = b.categorias.find((c) => c.id === lanc?.categoria_id)
+      return { status: 'lancado', texto: `${n.emitente}, ${quandoNota(n.data_emissao)}, ${moeda(n.valor)}${n.qtd_itens ? `, ${n.qtd_itens} itens` : ''}. Essa compra já estava lançada${cat ? ` em ${cat.nome}` : ''}.`, lancamento: lanc, nota: n }
+    }
+    const r = definirDestinoDemo(b, uid, n, 'familia')
+    const lanc = b.lancamentos.find((x) => x.id === n.lancamento_id)
+    const cat = b.categorias.find((c) => c.id === lanc?.categoria_id)
+    return { status: 'lancado', texto: `${n.emitente}, ${quandoNota(n.data_emissao)}, ${moeda(n.valor)}${n.qtd_itens ? `, ${n.qtd_itens} itens` : ''}. Lancei em ${cat?.nome ?? 'Imprevistos'}. Era da família toda?`, lancamento: lanc, nota: r.nota }
+  }
+  if (candidatas.length > 1) return { status: 'varias', texto: `Encontrei ${candidatas.length} compras em ${loja}: ${candidatas.slice(0, 5).map((n) => `${quandoNota(n.data_emissao)} ${moeda(n.valor)}${n.lancamento_id ? ' (já lançada)' : ''}`).join('; ')}. Qual delas?`, notas: candidatas.slice(0, 5) }
+  const conectado = Object.keys(b.conexoes_notas).some((k) => k.endsWith(`:${uid}`))
+  let item = b.caixa_entrada.find((c) => c.status === 'aguardando_nota' && c.usuario_id === uid && normalizar(c.estabelecimento) === l)
+  if (!item) {
+    const sug = sugerirCategoria(loja, b.categorias)
+    item = { id: gerarId('ce'), recebido_em: agoraIso(), canal: 'nota_parana', texto_bruto: 'Compra dita por voz/assistente: aguardando a nota fiscal', valor: valor || 0, estabelecimento: loja, final_cartao: '', data_compra: data || hojeIso(), sugestao_categoria: sug[0] || 'c_imprevistos', sugestoes: sug, usuario_id: uid, status: 'aguardando_nota' }
+    b.caixa_entrada.push(item)
+  }
+  return { status: 'aguardando', texto: conectado ? `A nota de ${loja} ainda não apareceu no Nota Paraná. Vou procurar de novo às 21h e te aviso. Se quiser, me diga o valor que eu lanço agora e junto com a nota depois.` : `Ainda não há conexão com o Nota Paraná para buscar a nota de ${loja}. Um administrador conecta em Configurações → Notas fiscais. Se quiser, me diga o valor que eu lanço agora.`, item }
+}
 
 export async function chamarMock(corpo: Record<string, unknown>): Promise<RespostaApi> {
   const b = await carregar()
@@ -797,8 +898,12 @@ export async function chamarMock(corpo: Record<string, unknown>): Promise<Respos
       case 'resolver_caixa_entrada': {
         const c = b.caixa_entrada.find((x) => x.id === p.id)
         if (!c) return erro('Item não encontrado')
+        const notaDoItem = b.notas_fiscais.find((n) => n.caixa_id === c.id)
+        if (notaDoItem && (p.destino || p.acao_caixa === 'ignorar')) { const r = definirDestinoDemo(b, uid, notaDoItem, (p.destino as DestinoNota) || 'ignorar', p.categoria_id as string | undefined, p.descricao as string | undefined); await persistir(); return ok(r.item ?? c) }
         if (p.acao_caixa === 'ignorar') c.status = 'ignorado'
+        else if (c.status === 'aguardando_nota' && !(Number(p.valor) > 0) && !(c.valor > 0)) return erro('Essa compra ainda espera a nota fiscal. Informe o valor para lançar agora.')
         else {
+          if (Number(p.valor) > 0) c.valor = Number(p.valor)
           const cartao = b.cartoes.find((k) => k.final === c.final_cartao)
           const catId = p.categoria_id || c.sugestao_categoria
           const l: Lancamento = { id: gerarId('l'), data: c.data_compra, competencia: competenciaDe(c.data_compra), tipo: 'despesa', valor: c.valor, categoria_id: catId, descricao: p.descricao || c.estabelecimento, estabelecimento: c.estabelecimento, forma_pgto: 'crédito', cartao_id: cartao?.id, usuario_id: c.usuario_id, origem: c.canal === 'email' ? 'email' : c.canal === 'fatura' ? 'fatura' : 'sms', status: 'confirmado', criado_em: agoraIso(), hash_dedup: hashDedup(c.valor, c.data_compra, c.final_cartao, c.estabelecimento) }
@@ -896,6 +1001,43 @@ export async function chamarMock(corpo: Record<string, unknown>): Promise<Respos
       case 'listar_alertas': return ok(alertasCalculados(b))
       case 'salvar_alerta': { const a = p.alerta as Alerta; const novo: Alerta = { ...a, id: a.id || gerarId('al'), ativo: a.ativo ?? true, avisar: a.avisar || [] }; const i = b.alertas.findIndex((x) => x.id === novo.id); if (i >= 0) b.alertas[i] = novo; else b.alertas.push(novo); await persistir(); return ok(alertasCalculados(b).find((x) => x.id === novo.id)) }
       case 'excluir_alerta': { b.alertas = b.alertas.filter((x) => x.id !== p.id); await persistir(); return ok({ id: p.id }) }
+
+      case 'status_notas_fiscais': return ok(statusNotasDemo(b))
+      case 'listar_notas_fiscais': { const comp = String(p.competencia || competenciaDe()); return ok(b.notas_fiscais.filter((n) => n.data_emissao.slice(0, 7) === comp && (!p.destino || n.destino === p.destino) && (!p.usuario_id_filtro || n.usuario_id === p.usuario_id_filtro)).sort((a, c) => (a.data_emissao < c.data_emissao ? 1 : -1))) }
+      case 'salvar_credencial_fiscal': {
+        if (eu?.perfil !== 'Administrador') return erro('Só o administrador conecta um portal')
+        const fonte = (p.fonte as FonteNota) || 'nota_parana'; const alvo = String(p.usuario_id_alvo || uid)
+        const cred = (p.credencial as { cpf?: string; usuario?: string; senha?: string } | undefined) ?? (p as { cpf?: string; usuario?: string; senha?: string })
+        if (fonte === 'nota_parana' && String(cred.cpf || '').replace(/\D/g, '').length !== 11) return erro('CPF inválido (11 dígitos).')
+        if (!cred.senha || String(cred.senha).length < 4) return erro('Informe a senha do portal.')
+        // A demonstração só marca a conexão: a senha não é guardada em lugar nenhum.
+        b.conexoes_notas[chaveConexao(fonte, alvo)] = { conectado_em: agoraIso(), ultimo_ok: '' }
+        registrarLog(b, uid, 'conectar_notas', `${FONTES_NOTAS[fonte]} · ${b.usuarios.find((u) => u.id === alvo)?.apelido ?? alvo}`)
+        await persistir(); return ok({ ok: true, fonte, usuario_id: alvo, conectado_em: agoraIso() })
+      }
+      case 'remover_credencial_fiscal': { const fonte = (p.fonte as FonteNota) || 'nota_parana'; const alvo = String(p.usuario_id_alvo || uid); delete b.conexoes_notas[chaveConexao(fonte, alvo)]; await persistir(); return ok({ ok: true, fonte, usuario_id: alvo }) }
+      case 'testar_credencial_fiscal': {
+        const fonte = (p.fonte as FonteNota) || 'nota_parana'; const alvo = String(p.usuario_id_alvo || uid)
+        const c = b.conexoes_notas[chaveConexao(fonte, alvo)]
+        if (!c) return erro(`Este membro ainda não está conectado ao ${FONTES_NOTAS[fonte]}.`)
+        if (fonte === 'nota_curitibana') return ok({ ok: false, etapa: 'login', motivo: 'desafio', dica: 'O e-Cidadão pediu uma verificação (ALTCHA) que o robô não resolve sozinho — Plano B.' })
+        c.ultimo_ok = agoraIso(); const qtd = b.notas_fiscais.filter((n) => n.fonte === fonte && n.usuario_id === alvo && n.data_emissao.slice(0, 7) === competenciaDe()).length
+        await persistir(); return ok({ ok: true, motivo: 'ok', quantidade: qtd, competencia: competenciaDe(), texto: `login ok · ${qtd} notas em ${competenciaDe().slice(5)}/${competenciaDe().slice(0, 4)}` })
+      }
+      case 'sincronizar_notas': {
+        const alvos = p.todos && eu?.perfil === 'Administrador' ? Object.keys(b.conexoes_notas) : Object.keys(b.conexoes_notas).filter((k) => k.endsWith(`:${uid}`))
+        const r: ResultadoSincronizacao[] = alvos.map((k) => { const [fonte, u] = k.split(':') as [FonteNota, string]; b.conexoes_notas[k].ultimo_ok = agoraIso(); const aConf = b.notas_fiscais.filter((n) => n.usuario_id === u && n.fonte === fonte && n.destino === 'a_confirmar').length; return { fonte, usuario_id: u, ok: fonte === 'nota_parana', motivo: fonte === 'nota_parana' ? 'ok' : 'desafio', novas: 0, lancadas: 0, caixa: aConf, a_confirmar: aConf, enriquecidas: 0, canceladas: 0, restantes: 0, resumo: aConf ? `${aConf} para confirmar na Caixa de Entrada` : 'Nenhuma nota nova.' } })
+        await persistir(); return ok(r)
+      }
+      case 'buscar_nota_fiscal': { if (!String(p.loja || '').trim()) return erro('Diga o nome da loja.'); const r = buscarNotaFiscalDemo(b, uid, String(p.loja).trim(), p.data as string | undefined, Number(p.valor) || undefined); await persistir(); return ok(r) }
+      case 'definir_destino_nota': {
+        const destino = p.destino as DestinoNota
+        if (!['familia', 'empresa', 'ignorar'].includes(destino)) return erro('Destino inválido (familia, empresa ou ignorar).')
+        const n = b.notas_fiscais.find((x) => x.id === p.nota_id) ?? b.notas_fiscais.find((x) => x.caixa_id === p.caixa_id)
+        if (!n) return erro('Nota não encontrada.')
+        const r = definirDestinoDemo(b, uid, n, destino, p.categoria_id as string | undefined, p.descricao as string | undefined); await persistir(); return ok(r)
+      }
+      case 'importar_historico_notas': { const meses = Math.min(12, Math.max(1, Number(p.meses_atras) || 3)); const comp = somarMeses(competenciaDe(), -meses); return ok({ competencia: comp, ok: true, motivo: 'ok', novas: 0, restantes: 0, proximo_meses_atras: meses + 1, concluido: meses >= 12, resumo: `Nenhuma nota nova em ${nomeCompetencia(comp)}.` }) }
 
       case 'assistente': {
         const minha: MensagemAssistente = { id: gerarId('m'), papel: 'eu', texto: String(p.mensagem || ''), data: agoraIso() }

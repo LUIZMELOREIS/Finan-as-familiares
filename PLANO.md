@@ -39,8 +39,15 @@ Especificação completa em `docs/ROBO_NOTAS_FISCAIS.md` (fases 0 a 6). Estado:
 
 | Fase | Entrega | Estado |
 |---|---|---|
-| 0 | Prova de conceito do login pelo `UrlFetchApp` (`apps-script/notasFiscais.gs`: `testeLoginNotaParana()` e `testeLoginNotaCuritibana()`), parsers puros com amostras anonimizadas em `apps-script/testes/amostras/` | ✅ código · ⏸️ o Luiz precisa rodar `testeLoginNotaParana()` no Apps Script com a propriedade `NOTAPR_<usuario_id>` para decidir Plano A × Plano B |
-| 1–6 | Leitura, conciliação, automação, voz, tela de configurações, documentação | ⬜ aguardam o resultado da Fase 0 |
+| 0 | Prova de conceito do login pelo `UrlFetchApp` (`notaParana.gs`: `testeLoginNotaParana()`; `notaCuritibana.gs`: `testeLoginNotaCuritibana()`), parsers puros com amostras anonimizadas em `apps-script/testes/amostras/` | ✅ código · ⏸️ o Luiz precisa rodar `testeLoginNotaParana()` (ou **Configurações → Notas fiscais → Testar**) para decidir Plano A × Plano B |
+| 1 | Leitura: lista do mês (`extrairListaNotasPr`), DANFE com itens (`extrairDanfePr`), meses e notas de serviço do Curitibana (`extrairMesesCwb`, `extrairNotasCwb`), aba `NotasFiscais`, estado por fonte×usuário em `Config` | ✅ (12/11/2026) |
+| 2 | Conciliação pura (`decidirConciliacao`): enriquecer lançamento, anexar à Caixa (inclusive `aguardando_nota`), lançar direto (3 acertos + limite), Caixa com "Família ou Empresa?"; `RegrasLoja.destino/cnpj`; `definir_destino_nota` aprende por CNPJ; mês fora do padrão (3× média) | ✅ |
+| 3 | Automação: `sincronizarNotasFiscais` nos gatilhos (6 h e 21h, `rotina_notas`), lotes de 40 DANFEs por execução com `restantes`, suspensão após 2 falhas de login/captcha com aviso aos admins, `importar_historico_notas` (12 meses, 1 mês por chamada), webhook `?webhook=notas` para coletor externo (Plano B) | ✅ |
+| 4 | Voz/assistente: "comprei no Condor" sem valor → `buscar_nota_fiscal` (ferramenta do Claude + regra local + Lançar › Falar); sem nota, item `aguardando_nota` na Caixa completado pela rotina | ✅ |
+| 5 | App: **Configurações → Notas fiscais** (conectar adulto com CPF+senha write-only, Testar, Trocar senha, Desconectar, ler agora, limites, rotina), Caixa de entrada com botões Família/Empresa/Ignorar, itens da nota e espera por voz; tipos e modo demo | ✅ |
+| 6 | Documentação (`docs/API.md`, README Parte 8, GUIA_DA_FAMILIA, LEIA-ME das amostras) e testes (seções 20–21 do `executar.mjs`, `notas.test.ts`) | ✅ |
+
+Pendências do robô: (a) o **teste real do login** só pode vir do Apps Script do Luiz — se der `bloqueado`/`conexao_recusada`, ativar o Plano B (coletor no Brasil → `?webhook=notas`); (b) os parsers foram escritos sobre amostras reconstruídas: na primeira leitura real conferir `extrairListaNotasPr` e `extrairDanfePr` com o HTML verdadeiro (anonimizar antes de guardar como amostra); (c) Nota Curitibana depende de passar pelo ALTCHA do e-Cidadão — hoje o robô detecta e suspende.
 
 Achados do mapeamento (11/11/2026, sem credenciais):
 - O host da aplicação `notaparana.pr.gov.br` **recusa conexões de fora do Brasil** (reset de TCP); o portal institucional `www.notaparana.pr.gov.br` e a Identidade Digital `authz-sefa.identidadedigital.pr.gov.br` respondem normalmente. Por isso a prova só pode ser feita de dentro do Apps Script. Se o IP do Google também for barrado, o Plano B (GitHub Actions, também nos EUA) tende a ser barrado igualmente; a alternativa seria rodar o coletor num computador no Brasil.

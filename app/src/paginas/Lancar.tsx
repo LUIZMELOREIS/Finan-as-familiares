@@ -9,9 +9,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, ErroApi } from '../api/cliente'
 import { competenciaDosFiltros, useBoot, useSessao } from '../store/sessao'
-import type { Categoria, ContaAPagar, Lancamento, LeituraExtraida, OrigemLancamento, RegraLoja } from '../tipos'
+import type { BuscaNotaFiscal, Categoria, ContaAPagar, Lancamento, LeituraExtraida, OrigemLancamento, RegraLoja } from '../tipos'
 import { dataBr, moeda } from '../util/formato'
 import { extrairDeTexto } from '../util/extrator'
+import { lojaDeFraseSemValor } from '../util/notas'
 import { lerCompartilhado } from '../util/compartilhado'
 import { Cabecalho } from '../componentes/Cabecalho'
 import { Icone } from '../componentes/Icone'
@@ -58,6 +59,7 @@ export default function Lancar() {
   const [sugestao, setSugestao] = useState<string | undefined>(() => (editando ? lancamentoEdicao.categoria_id : undefined))
   const [aba, setAba] = useState<AbaCardapio>(() => (editando ? abaDe(categorias.find((c) => c.id === lancamentoEdicao.categoria_id)) : params.get('tipo') === 't_receitas' ? 't_receitas' : 't_variaveis'))
   const [lido, setLido] = useState(false)
+  const [buscandoNota, setBuscandoNota] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [pronto, setPronto] = useState<Lancamento[] | null>(null)
   const { frequentes, registrar } = useLancarFrequentes(usuario.id, categorias)
@@ -126,7 +128,22 @@ export default function Lancar() {
   }
 
   function aoTextoVoz(texto: string) {
-    aplicar(extrairDeTexto(texto, categorias), 'voz', texto)
+    const local = extrairDeTexto(texto, categorias)
+    // "Comprei no Condor" sem valor → o robô procura a nota fiscal (CPF na nota) e lança com o valor real.
+    const loja = !local.valor && usuario.perfil !== 'Dependente' ? lojaDeFraseSemValor(texto) : ''
+    if (loja) {
+      setBuscandoNota(loja)
+      api<BuscaNotaFiscal>('buscar_nota_fiscal', { loja })
+        .then((r) => {
+          setBuscandoNota(null)
+          if (r.status === 'lancado' && r.lancamento) { avisar(r.texto, { tipo: 'ok', duracao: 8000 }); nav('/') }
+          else { avisar(r.texto, { tipo: 'info', duracao: 9000 }); aplicar({ ...local, estabelecimento: loja }, 'voz', texto) }
+        })
+        .catch((e) => { setBuscandoNota(null); avisar(e instanceof Error ? e.message : 'Não consegui procurar a nota', { tipo: 'erro' }); aplicar({ ...local, estabelecimento: loja }, 'voz', texto) })
+      setLido(true)
+      return
+    }
+    aplicar(local, 'voz', texto)
     setLido(true)
     // Refina no servidor (regras da loja / Claude) sem travar a tela.
     api<LeituraExtraida>('ler_texto', { texto, tipo: 'voz' })
@@ -230,7 +247,7 @@ export default function Lancar() {
           <DadosDespesa
             titulo={modo === 'foto' ? 'Dados lidos do cupom' : editando ? 'Dados do lançamento' : ehReceita ? 'Dados da receita' : 'Dados da despesa'}
             lido={lido}
-            topo={modo === 'foto' ? <CapturaFoto aoLer={aoLerFoto} aoErro={(m) => avisar(m, { tipo: 'erro' })} autoAbrir={modoParam === 'foto' && !compartilhado} arquivoInicial={compartilhado} /> : modo === 'falar' ? <CapturaVoz aoTexto={aoTextoVoz} /> : undefined}
+            topo={modo === 'foto' ? <CapturaFoto aoLer={aoLerFoto} aoErro={(m) => avisar(m, { tipo: 'erro' })} autoAbrir={modoParam === 'foto' && !compartilhado} arquivoInicial={compartilhado} /> : modo === 'falar' ? <><CapturaVoz aoTexto={aoTextoVoz} />{buscandoNota && <p className="flex items-center" style={{ gap: 8, fontSize: 13, color: 'var(--muted)', margin: '8px 0 0' }} aria-live="polite"><Icone nome="receipt" tamanho={15} />Procurando a nota de {buscandoNota} no Nota Paraná…</p>}</> : undefined}
             rascunho={rascunho}
             aoMudar={mudar}
             cartoes={cartoes}

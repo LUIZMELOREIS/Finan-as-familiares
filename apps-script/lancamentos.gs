@@ -395,6 +395,7 @@ function regraDaLoja(estabelecimento, regras) {
   let melhor = null;
   (regras || []).forEach((r) => {
     const k = String(r.loja_normalizada || '');
+    if (!r.categoria_id) return; // regra só de destino (robô de notas fiscais) não sugere categoria
     if (k && (chave === k || chave.indexOf(k) >= 0) && (!melhor || k.length > melhor.loja_normalizada.length)) melhor = r;
   });
   return melhor;

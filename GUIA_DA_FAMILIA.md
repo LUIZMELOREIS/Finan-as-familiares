@@ -16,6 +16,7 @@ Toque no botão **[+]** no centro da barra de baixo (ou em **Lançar despesa**) 
 | **Enviar fatura** | Luz, água, internet, cartão — PDF ou foto. O PDF é lido no próprio celular (empresa, valor, vencimento, código de barras, consumo). | Vira conta a pagar com código de barras para copiar. Na 1ª vez de cada conta, escolha **➕ Nova conta fixa…** e ela passa a aparecer todo mês. |
 | **Digitar** | Valor → despesa no cardápio → confirmar. | Três toques. "Mais usados por você" fica no topo. |
 | **Falar** | "Gastei 45 na padaria no Pix". | No iPhone, use o microfone do teclado. Também funciona no Assistente. |
+| **Pedir CPF na nota** | Na loja, peça CPF na nota. Depois diga **"comprei no Condor"** (sem valor): o app busca a nota no Nota Paraná e lança com o valor real e os itens. | Se a nota ainda não apareceu, a compra fica esperando na Caixa de entrada e é completada à noite. Quem conecta o CPF é o administrador, em Configurações → Notas fiscais. |
 
 - Crédito parcelado: escolha o cartão e o número de parcelas; o app distribui nos meses certos.
 - **Receita** (salário, renda extra, aluguel recebido, reembolso): no Lançar, toque em **Receita** no topo, digite o valor e escolha a categoria. O salário previsto do mês fica em **Configurações → Orçamento → aba Receitas**.
@@ -25,6 +26,8 @@ Toque no botão **[+]** no centro da barra de baixo (ou em **Lançar despesa**) 
 
 ## 3. Caixa de entrada (compras que o app capturou sozinho)
 Quando chega um SMS ou alerta do banco, aparece: **"R$ 87,40 · PADARIA PÃO QUENTE — qual é a despesa?"** com a sugestão já marcada. **Um toque** e está lançado. A bolinha vermelha mostra quantas esperam.
+
+As **notas fiscais com CPF** também caem aqui quando o robô não tem certeza: loja nova ou valor alto perguntam **"Família ou Empresa?"**. Toque na categoria (família), em **Empresa** (sai do painel da casa) ou em **Ignorar** — o app aprende e, da próxima vez, decide sozinho. Toque em **Ver itens da nota** para conferir o que foi comprado.
 
 ## 4. Painel
 - **4 cards**: Receitas · Despesas fixas · Despesas variáveis · Projetos. Toque para ver as despesas do tipo, por grupo.

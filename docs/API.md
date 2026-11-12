@@ -66,7 +66,7 @@ Competência é `AAAA-MM`.
 | `listar_cartoes` | Adulto | — | `Cartao[]` |
 | `salvar_cartao` | Administrador | `cartao` | `Cartao` |
 | `listar_caixa_entrada` | Júnior (só os próprios) | `status?` | `ItemCaixaEntrada[]` |
-| `resolver_caixa_entrada` | Júnior | `id`, `acao_caixa: 'lancar'\|'ignorar'`, `categoria_id?`, `descricao?` | `ItemCaixaEntrada` (+ `Lancamento`) |
+| `resolver_caixa_entrada` | Júnior | `id`, `acao_caixa: 'lancar'\|'ignorar'`, `categoria_id?`, `descricao?`, `valor?` (obrigatório para um item `aguardando_nota`), `destino?: 'familia'\|'empresa'\|'ignorar'` (item vindo de nota fiscal: delega a `definir_destino_nota`) | `ItemCaixaEntrada` (+ `Lancamento`) |
 | `importar_fatura` | Adulto | `imagem_base64` ou `texto` (OFX/CSV), `cartao_id` | `LeituraExtraida` com `compras[]` e `ja_lancada` |
 | `confirmar_importacao` | Adulto | `cartao_id`, `compras[]` | `ItemCaixaEntrada[]` criados |
 | `listar_projetos` | Júnior | — | `Projeto[]` (com `valor_atual`) |
@@ -155,9 +155,36 @@ Mudanças da versão 2 (referência visual `referencia_visual.html`):
 ### Assistente — como funciona no servidor
 
 1. O Apps Script monta um **resumo agregado** (totais por categoria/grupo/mês dos últimos 12 meses, médias de 3 meses, contas a vencer, projetos com ritmo, assinaturas detectadas). Nada de dados pessoais além do apelido dos membros.
-2. Envia ao Claude (Messages API) com **tool use**: `buscar_lancamentos(filtros)`, `total_por_categoria(competencia, categoria_id|grupo_id)`, `projetar_meta(projeto_id, corte_mensal?)`, `lancar_despesa(valor, categoria_id, descricao, forma_pgto, data)`, `proximas_saidas(dias)`. O servidor executa cada ferramenta na planilha e devolve o resultado ao modelo até a resposta final.
+2. Envia ao Claude (Messages API) com **tool use**: `buscar_lancamentos(filtros)`, `total_por_categoria(competencia, categoria_id|grupo_id)`, `projetar_meta(projeto_id, corte_mensal?)`, `lancar_despesa(valor, categoria_id, descricao, forma_pgto, data)`, `proximas_saidas(dias)`, `buscar_nota_fiscal(loja, data?, valor?)`. O servidor executa cada ferramenta na planilha e devolve o resultado ao modelo até a resposta final.
 3. Resposta em português, curta, com números em `R$ 1.234,56`; quando houver comparação, devolve `barras[]` para a mini-barra.
 4. Sem chave do Claude: o assistente responde às perguntas mais comuns por **regras locais** (gasto por categoria, assinaturas, contas da semana, fechamento do mês, lançar por texto via `extrairDeTexto`) e avisa que a conversa livre precisa da chave.
+
+### Robô de Notas Fiscais (Nota Paraná + Nota Curitibana)
+
+Especificação em [`ROBO_NOTAS_FISCAIS.md`](ROBO_NOTAS_FISCAIS.md). Toda compra com o CPF de um membro na nota entra sozinha: o robô lê o portal a cada 6 h e às 21h, grava na aba **`NotasFiscais`** (`id, fonte, chave_acesso, id_portal, tp_doc, usuario_id, cnpj, emitente, data_emissao, valor, frete, desconto, forma_pgto, itens (JSON), situacao, destino, lancamento_id, caixa_id, lida_em, atualizada_em`) e concilia: enriquece um lançamento já existente (valor ±0,01, data ±2 dias, mesma loja), anexa a um item da Caixa de Entrada (inclusive os `aguardando_nota` criados por voz), lança direto (loja com 3 acertos em `RegrasLoja` e valor até `notas_limite_direto`) ou cria um item na Caixa — com a pergunta **"Família ou Empresa?"** quando a loja é nova, o valor passa de `notas_limite_grande`, é NF-e acima do limite direto ou o mês está 3× acima da média. `RegrasLoja` ganhou `destino` e `cnpj` (o robô aprende por CNPJ). `Config` ganhou `rotina_notas`, `notas_limite_direto` (500) e `notas_limite_grande` (1500). `CaixaEntrada.canal` aceita `nota_parana` e `nota_curitibana`, `status` aceita `aguardando_nota`, e o item devolve `nota: NotaFiscalResumo` (nunca a chave inteira — só `chave_final`, 8 dígitos). `Lancamento.origem` aceita `nota_parana` e `nota_curitibana`.
+
+**Credenciais** (CPF + senha do portal) ficam **só** nas Propriedades do script (`NOTAPR_<usuario_id>`, `NOTACWB_<usuario_id>`), nunca na planilha nem em resposta da API; os parâmetros `cpf`, `senha`, `usuario`, `credencial` e `notas` não vão para o log.
+
+| acao | perfil mínimo | parâmetros | devolve |
+|---|---|---|---|
+| `status_notas_fiscais` | Adulto | — | `{ conexoes: ConexaoNotas[], contagens: { total, mes, valor_mes, a_confirmar, empresa }, limites: { direto, grande }, rotina_ativa }` — uma conexão por adulto × fonte (`conectado`, `ultima_leitura`, `ultimo_ok`, `suspenso`, `motivo`, `total_notas`, `restantes`) |
+| `listar_notas_fiscais` | Adulto | `competencia?`, `usuario_id_filtro?`, `destino?`, `limite?` | `NotaFiscalResumo[]` |
+| `salvar_credencial_fiscal` | Administrador | `fonte: 'nota_parana'\|'nota_curitibana'`, `usuario_id_alvo` (membro adulto), `credencial: { cpf, senha }` ou `{ usuario, senha }` | `{ ok, fonte, usuario_id, conectado_em }` (a senha não volta) |
+| `remover_credencial_fiscal` | Administrador | `fonte`, `usuario_id_alvo` | `{ ok, fonte, usuario_id }` |
+| `testar_credencial_fiscal` | Administrador | `fonte`, `usuario_id_alvo` | `{ ok, motivo, quantidade?, competencia?, texto?, etapa?, dica?, caminho? }` — `motivo`: `ok`, `senha_invalida`, `bloqueado` (Plano B), `conexao_recusada`, `desafio` (captcha), `formulario_login` |
+| `sincronizar_notas` | Adulto | `todos?` (só Admin: todos os membros), `fonte?`, `notificar?` | `Array<{ fonte, usuario_id, ok, motivo, novas, lancadas, caixa, a_confirmar, enriquecidas, canceladas, restantes, resumo }>` |
+| `buscar_nota_fiscal` | Adulto | `loja`, `data?`, `valor?`, `sincronizar?` (padrão `true`: lê o portal se não achar) | `{ status: 'lancado'\|'varias'\|'aguardando', texto, lancamento?, nota?, notas?, item? }` — "comprei no Condor": lança com o valor real da nota ou deixa um item `aguardando_nota` na Caixa |
+| `definir_destino_nota` | Adulto | `nota_id` ou `caixa_id`, `destino: 'familia'\|'empresa'\|'ignorar'`, `categoria_id?`, `descricao?` | `{ nota: NotaFiscalResumo, item?: ItemCaixaEntrada }` — `familia` lança (ou mantém) o lançamento; `empresa`/`ignorar` tiram do painel da casa; sempre aprende para o CNPJ |
+| `importar_historico_notas` | Administrador | `usuario_id_alvo`, `fonte?`, `meses_atras` (1–12; um mês por chamada), `max_detalhes?` | `{ competencia, ok, motivo, novas, restantes, proximo_meses_atras, concluido, resumo }` |
+
+**Assistente:** ganhou a ferramenta `buscar_nota_fiscal(loja, data?, valor?)`; sem a chave do Claude, "comprei no Condor" (sem valor) também dispara a busca pelas regras locais. **Voz** (Lançar › Falar): frase de compra sem valor chama `buscar_nota_fiscal` antes de montar o rascunho.
+
+### Webhook de notas (coletor externo — Plano B)
+
+```
+POST <URL>?webhook=notas   { token_familia, token, notas: [{ fonte?, id_portal|chave_acesso, tp_doc?, cnpj, emitente, data_emissao, valor, situacao?, forma_pgto?, frete?, desconto?, itens?: [{ d, c?, q, un?, vu, vt }] }] }
+```
+Para quando o portal recusa o IP do Google: um coletor rodando no Brasil lê as notas e as entrega aqui; o servidor concilia do mesmo jeito que a rotina. Devolve `{ recebidas, processadas, resumo }`. Exige token da família + token de um adulto; até 100 notas por chamada.
 
 ### Webhook do Telegram
 

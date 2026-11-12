@@ -222,11 +222,19 @@ function compraJaExiste(compra, lancamentos, itensCaixa, finalCartao, cartaoId) 
   return (itensCaixa || []).some((c) => c.status !== 'ignorado' && (c.hash_dedup === hash || (mesmoValorEData(c.valor, c.data_compra) && (!finalCartao || c.final_cartao === finalCartao))));
 }
 
+/** Canal da Caixa de Entrada → origem do lançamento (função pura). */
+function origemDoCanal(canal) {
+  if (canal === 'email' || canal === 'fatura' || canal === 'nota_parana' || canal === 'nota_curitibana') return canal;
+  return 'sms';
+}
+
 // =====================================================================
 // PARTE 2 — WEBHOOK, CAIXA DE ENTRADA, FATURAS E CARTÕES (tocam a planilha)
 // =====================================================================
 
-const CANAIS_VALIDOS = ['sms_ios', 'sms_android', 'email', 'fatura'];
+const CANAIS_VALIDOS = ['sms_ios', 'sms_android', 'email', 'fatura', 'nota_parana', 'nota_curitibana'];
+/** Canais que vêm do robô de notas fiscais (o item da Caixa carrega os botões Família / Empresa / Ignorar). */
+const CANAIS_NOTA = ['nota_parana', 'nota_curitibana'];
 
 /**
  * Webhook `?webhook=1` (GET ou POST). Devolve { status: 'pendente'|'duplicado'|'ignorado', item }.
@@ -269,10 +277,11 @@ function registrarAlertaNaCaixa(texto, canal, usuario) {
 }
 
 /** Item da caixa de entrada para o app (sem hash interno). */
-function itemCaixaPublico(c) {
+function itemCaixaPublico(c, nota) {
   const o = Object.assign({}, c);
   delete o.hash_dedup;
   o.sugestoes = Array.isArray(o.sugestoes) ? o.sugestoes : String(o.sugestoes || '').split(';').filter(Boolean);
+  if (nota) o.nota = notaFiscalResumo(nota);
   return o;
 }
 
@@ -281,7 +290,8 @@ function acaoListarCaixaEntrada(p, ctx) {
   let itens = lerAba('CaixaEntrada');
   if (ctx.ehDependente) itens = itens.filter((c) => c.usuario_id === ctx.uid);
   if (p.status) itens = itens.filter((c) => c.status === p.status);
-  return itens.slice().sort((a, b) => (a.recebido_em < b.recebido_em ? 1 : -1)).map(itemCaixaPublico);
+  const notasPorCaixa = indexarNotasPorCaixa(lerAba('NotasFiscais'));
+  return itens.slice().sort((a, b) => (a.recebido_em < b.recebido_em ? 1 : -1)).map((c) => itemCaixaPublico(c, notasPorCaixa[c.id]));
 }
 
 /**
@@ -293,7 +303,13 @@ function acaoResolverCaixaEntrada(p, ctx) {
   if (!c) throw new ErroUsuario('Item não encontrado');
   if (ctx.ehDependente && c.usuario_id !== ctx.uid) throw new ErroUsuario('Sem permissão');
   if (c.status === 'lançado') throw new ErroUsuario('Este item já foi lançado.');
+  // Item do robô de notas fiscais: a decisão Família / Empresa / Ignorar passa por definir_destino_nota (aprende o CNPJ).
+  const nota = CANAIS_NOTA.indexOf(c.canal) >= 0 ? lerAba('NotasFiscais').find((n) => n.caixa_id === c.id) : null;
+  if (nota && (p.acao_caixa === 'ignorar' || p.destino)) {
+    return acaoDefinirDestinoNota({ nota_id: nota.id, destino: p.acao_caixa === 'ignorar' ? 'ignorar' : p.destino, categoria_id: p.categoria_id, descricao: p.descricao }, ctx).item;
+  }
   if (p.acao_caixa === 'ignorar') return itemCaixaPublico(atualizarPorId('CaixaEntrada', c.id, { status: 'ignorado' }));
+  if (c.status === 'aguardando_nota' && !(c.valor > 0)) throw new ErroUsuario('Esta compra ainda espera a nota fiscal: informe o valor para lançar agora.');
 
   const cartao = lerAba('Cartoes').find((k) => apenasFinalCartao(k.final) === c.final_cartao);
   const categoriaId = p.categoria_id || c.sugestao_categoria || 'c_imprevistos';
@@ -306,14 +322,17 @@ function acaoResolverCaixaEntrada(p, ctx) {
     try { aprenderLoja(c.estabelecimento, categoriaId, ctx.uid); } catch (e) { console.warn('Não gravei a regra da loja: ' + e.message); }
   }
   const data = c.data_compra || hojeIso();
+  const valor = p.valor > 0 ? lerValor(p.valor) : c.valor;
   const l = inserirLinhas('Lancamentos', [{
-    id: gerarId('l'), data, competencia: competenciaDe(data), tipo: 'despesa', valor: c.valor, categoria_id: categoriaId,
-    descricao: p.descricao || c.estabelecimento, estabelecimento: c.estabelecimento, forma_pgto: 'crédito', cartao_id: cartao ? cartao.id : '',
-    parcela: '', usuario_id: c.usuario_id || ctx.uid, origem: c.canal === 'email' ? 'email' : c.canal === 'fatura' ? 'fatura' : 'sms',
-    anexo_url: '', status: 'confirmado', hash_dedup: hashDedup(c.valor, data, c.final_cartao, c.estabelecimento),
+    id: gerarId('l'), data, competencia: competenciaDe(data), tipo: 'despesa', valor, categoria_id: categoriaId,
+    descricao: p.descricao || c.estabelecimento, estabelecimento: c.estabelecimento,
+    forma_pgto: nota ? formaPgtoDaNota(nota.forma_pgto) : 'crédito', cartao_id: cartao ? cartao.id : '',
+    parcela: '', usuario_id: c.usuario_id || ctx.uid, origem: origemDoCanal(c.canal),
+    anexo_url: '', status: 'confirmado', hash_dedup: hashDedup(valor, data, c.final_cartao, c.estabelecimento),
     criado_em: agoraIso(), editado_por: '', excluido: false, projeto_id: '',
   }])[0];
-  return itemCaixaPublico(atualizarPorId('CaixaEntrada', c.id, { status: 'lançado', lancamento_id: l.id }));
+  if (nota) atualizarPorId('NotasFiscais', nota.id, { lancamento_id: l.id, destino: 'familia', atualizada_em: agoraIso() });
+  return itemCaixaPublico(atualizarPorId('CaixaEntrada', c.id, { status: 'lançado', lancamento_id: l.id, valor }), nota);
 }
 
 /**

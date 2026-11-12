@@ -30,7 +30,9 @@ Tudo está em português e comentado. Você não precisa saber programar para in
 | `rotinas.gs` | Próximas saídas (30/60/90 dias), avisos do vigia, alertas personalizados e as rotinas `vigiaDiario`, `analiseQuinzenal`, `fechamentoDoMes`. |
 | `assistente.gs` | Assistente: resumo agregado dos dados, conversa com o Claude com *tool use*, regras locais sem chave, histórico (aba `Conversas`), sugestões. |
 | `telegram.gs` | Bot do Telegram: `configurarTelegram()`, webhook `?telegram=1`, `/start CODIGO`, texto → assistente, foto → cupom com botões, `enviarTelegram()`. |
-| `notasFiscais.gs` | Robô de Notas Fiscais (Nota Paraná + Nota Curitibana), Fase 0: login pelo `UrlFetchApp` seguindo o OAuth à mão, `testeLoginNotaParana()` / `testeLoginNotaCuritibana()`. Credenciais só em Propriedades do script (`NOTAPR_<usuario_id>`). Ver `docs/ROBO_NOTAS_FISCAIS.md`. |
+| `notasFiscais.gs` | Robô de Notas Fiscais — núcleo comum: cookies e redirecionamentos do `UrlFetchApp`, credenciais (`NOTAPR_<usuario_id>` / `NOTACWB_<usuario_id>`, só em Propriedades do script), aba `NotasFiscais`, conciliação (`decidirConciliacao`, `processarNota`), destino Família/Empresa/Ignorar aprendido por CNPJ, rotina `sincronizarNotasFiscais`, "comprei no Condor" (`buscarNotaFiscalParaUsuario`), ações da API e `?webhook=notas`. Ver `docs/ROBO_NOTAS_FISCAIS.md`. |
+| `notaParana.gs` | Nota Paraná: login OAuth/PKCE na Identidade Digital Sefa/PR à mão, lista do mês (`NotasFiscaisAjax`), DANFE com itens (`NotaFiscalHtml`), `testeLoginNotaParana()`. Parsers puros: `extrairListaNotasPr`, `extrairDanfePr`. |
+| `notaCuritibana.gs` | Nota Curitibana: `Home/CheckLogin` → e-Cidadão (detecta o desafio ALTCHA), meses e notas de serviço (`extrairMesesCwb`, `extrairNotasCwb`), `testeLoginNotaCuritibana()`. |
 | `notificacoes.gs` | Push (via serviço externo opcional), lembrete diário, e-mail de resumo e `notificarUsuario()` (push → Telegram → e-mail). |
 | `backup.gs` | Backup semanal (mantém os 12 últimos) e `backup_agora`. |
 | `dados_iniciais.gs` | Tipos, grupos, categorias (cardápio), grupos de análise, cores e versículos (gerado a partir de `/dados`, não edite à mão). |
@@ -50,7 +52,7 @@ Tudo está em português e comentado. Você não precisa saber programar para in
 
 **Opção A2 — um arquivo só (a mais fácil)**
 
-Em vez de criar 18 arquivos, abra `Código.gs` e cole o conteúdo de `dist/FinancasDaFamilia.gs` (todos os `.gs` concatenados; gerado por `node testes/empacotar.mjs`). O `appsscript.json` continua indo no manifesto. O resultado é idêntico, porque o Apps Script compartilha o escopo global entre arquivos.
+Em vez de criar 20 arquivos, abra `Código.gs` e cole o conteúdo de `dist/FinancasDaFamilia.gs` (todos os `.gs` concatenados; gerado por `node testes/empacotar.mjs`). O `appsscript.json` continua indo no manifesto. O resultado é idêntico, porque o Apps Script compartilha o escopo global entre arquivos.
 
 **Opção B — com o `clasp` (para quem usa terminal)**
 
@@ -170,6 +172,7 @@ O que dá para fazer no bot: escrever `gastei 45 na padaria no pix` (lança), pe
 |---|---|---|
 | `processarEmails` | a cada hora | Lê os marcadores do Gmail. |
 | `processarPastaEntrada` | a cada hora | Lê os arquivos de `Contas da Casa/_Entrada`. |
+| `sincronizarNotasFiscais` | a cada 6 h e às 21h | Robô de notas fiscais: lê o Nota Paraná / Nota Curitibana de cada adulto conectado e concilia (desligue com `rotina_notas`). |
 | `gerarPrevistosDoMes` | todo dia às 6h | Cria os lançamentos "a confirmar" das contas fixas e garante o orçamento do mês. |
 | `avisarVencimentos` | todo dia às 8h | E-mail + push: contas que vencem em 3 dias, hoje, atrasadas e as que subiram +20%. |
 | `vigiaDiario` | na hora do lembrete (padrão 20h) | Gasto fora do padrão (> 1,35× a média de 3 meses), cobrança duplicada no cartão, assinatura nova, conta a vencer em 3 dias ou atrasada, gastos de cartão sem categoria, alertas personalizados e o lembrete "Você lançou os gastos de hoje?". Grava na aba `Avisos` e avisa (push/Telegram/e-mail) os administradores ou as pessoas marcadas no alerta. |
